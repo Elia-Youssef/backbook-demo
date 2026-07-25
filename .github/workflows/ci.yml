@@ -78,12 +78,41 @@ jobs:
           cmake --build --preset gcc-debug --parallel
           ctest --preset gcc-debug --output-on-failure --timeout 30
 
+  frontend:
+    name: Frontend / Node 24
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install, test, and build
+        working-directory: web
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run typecheck
+          npm test
+          npm run build
+          git diff --exit-code -- dist
+
   quality-gate:
     name: quality-gate
     if: ${{ always() }}
     needs:
       - windows-msvc
       - linux-gcc
+      - frontend
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
@@ -92,7 +121,9 @@ jobs:
         env:
           WINDOWS_RESULT: ${{ needs.windows-msvc.result }}
           LINUX_RESULT: ${{ needs.linux-gcc.result }}
+          FRONTEND_RESULT: ${{ needs.frontend.result }}
         run: |
           set -euo pipefail
           test "$WINDOWS_RESULT" = "success"
           test "$LINUX_RESULT" = "success"
+          test "$FRONTEND_RESULT" = "success"
