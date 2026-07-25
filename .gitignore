@@ -4,9 +4,16 @@
 /cmake-build-*/
 CMakeFiles/
 CMakeCache.txt
+CMakeUserPresets.json
 CTestTestfile.cmake
 Testing/
+cmake_install.cmake
 compile_commands.json
+install_manifest.txt
+build.ninja
+rules.ninja
+.ninja_deps
+.ninja_log
 
 # Compilers and linkers
 *.obj
@@ -14,12 +21,16 @@ compile_commands.json
 *.pdb
 *.ilk
 *.idb
+*.exp
+*.iobj
+*.ipdb
 *.exe
 *.dll
 *.lib
 *.a
 *.so
 *.dylib
+*.dSYM/
 
 # IDE and editor state
 /.vs/
@@ -29,6 +40,10 @@ compile_commands.json
 *.user
 *.userosscache
 *.sln.docstates
+*.swp
+*.tmp
+*.bak
+*~
 
 # Runtime state and diagnostics
 *.journal
@@ -45,9 +60,15 @@ logs/
 node_modules/
 .vite/
 .vitest/
+.cache/
 coverage/
+*.gcda
+*.gcno
+*.profdata
+*.profraw
 *.tsbuildinfo
 
 # Operating-system metadata
 .DS_Store
+Desktop.ini
 Thumbs.db
