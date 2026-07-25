@@ -20,8 +20,11 @@ add_library(backbook-domain STATIC
     src/domain/ledger.cpp
     src/domain/ledger_totals.cpp
     src/domain/lifecycle.cpp
+    src/domain/limits.cpp
     src/domain/money.cpp
     src/domain/posting_policy.cpp
+    src/domain/settlement.cpp
+    src/domain/state.cpp
     src/domain/trade.cpp
 )
 add_library(backbook::domain ALIAS backbook-domain)
@@ -56,9 +59,12 @@ if(BUILD_TESTING)
         tests/unit/ledger_tests.cpp
         tests/unit/ledger_totals_tests.cpp
         tests/unit/lifecycle_tests.cpp
+        tests/unit/limits_tests.cpp
         tests/unit/money_tests.cpp
         tests/unit/outcome_tests.cpp
         tests/unit/posting_policy_tests.cpp
+        tests/unit/settlement_tests.cpp
+        tests/unit/state_tests.cpp
         tests/unit/trade_tests.cpp
     )
     target_link_libraries(backbook-domain-tests
