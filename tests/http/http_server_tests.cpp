@@ -17,6 +17,7 @@
 #include <string>
 #include <thread>
 #include <utility>
+#include <vector>
 
 namespace backbook::server {
 namespace {
@@ -376,6 +377,52 @@ TEST(HttpServerTest, UnexpectedExceptionReturnsGenericProblem) {
     EXPECT_EQ(problem["code"], "INTERNAL_ERROR");
     EXPECT_EQ(problem["detail"], "The request could not be completed.");
     EXPECT_EQ(response->body.find("sensitive diagnostic"), std::string::npos);
+}
+
+TEST(HttpServerTest, ServesCommittedFrontendWithoutSourceMaps) {
+    const auto distribution = std::filesystem::path("web") / "dist";
+    ASSERT_TRUE(std::filesystem::is_directory(distribution));
+
+    std::vector<std::string> asset_paths;
+    std::error_code filesystem_error;
+    for (std::filesystem::recursive_directory_iterator
+             current(distribution, filesystem_error),
+         end;
+         !filesystem_error && current != end;
+         current.increment(filesystem_error)) {
+        if (!current->is_regular_file()) {
+            continue;
+        }
+        EXPECT_NE(current->path().extension(), ".map");
+        if (current->path().extension() == ".js" ||
+            current->path().extension() == ".css") {
+            asset_paths.push_back(
+                "/" + std::filesystem::relative(current->path(), distribution)
+                          .generic_string());
+        }
+    }
+    ASSERT_FALSE(filesystem_error);
+    ASSERT_EQ(asset_paths.size(), 2U);
+
+    RunningServer server(distribution);
+    httplib::Client client("127.0.0.1", server.port());
+    const auto index = client.Get("/");
+    ASSERT_TRUE(index);
+    EXPECT_EQ(index->status, 200);
+    EXPECT_EQ(index->get_header_value("Content-Type"), "text/html");
+    EXPECT_NE(index->body.find(R"(<div id="root"></div>)"), std::string::npos);
+
+    for (const auto& asset_path : asset_paths) {
+        const auto asset = client.Get(asset_path);
+        ASSERT_TRUE(asset);
+        EXPECT_EQ(asset->status, 200);
+        const auto expected_content_type =
+            std::filesystem::path(asset_path).extension() == ".js"
+                ? "text/javascript"
+                : "text/css";
+        EXPECT_EQ(asset->get_header_value("Content-Type"),
+                  expected_content_type);
+    }
 }
 
 TEST(HttpServerTest, UnknownRoutesAndStaticFilesStayBounded) {
