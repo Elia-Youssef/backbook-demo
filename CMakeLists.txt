@@ -69,6 +69,24 @@ target_link_libraries(
 target_compile_features(backbook-storage PUBLIC cxx_std_20)
 backbook_enable_warnings(backbook-storage)
 
+add_library(backbook-service STATIC
+    src/service/command.cpp
+    src/service/command_service.cpp
+)
+add_library(backbook::service ALIAS backbook-service)
+
+target_include_directories(backbook-service
+    PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
+target_link_libraries(
+    backbook-service
+    PUBLIC
+        backbook::storage
+)
+target_compile_features(backbook-service PUBLIC cxx_std_20)
+backbook_enable_warnings(backbook-service)
+
 include(CTest)
 
 if(BUILD_TESTING)
@@ -134,6 +152,28 @@ if(BUILD_TESTING)
 
     gtest_discover_tests(
         backbook-journal-tests
+        DISCOVERY_TIMEOUT 30
+        PROPERTIES TIMEOUT 30
+    )
+
+    add_executable(backbook-service-tests
+        tests/unit/command_service_tests.cpp
+    )
+    target_include_directories(
+        backbook-service-tests
+        PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests"
+    )
+    target_link_libraries(
+        backbook-service-tests
+        PRIVATE
+            backbook::service
+            GTest::gtest_main
+    )
+    backbook_enable_warnings(backbook-service-tests)
+
+    gtest_discover_tests(
+        backbook-service-tests
         DISCOVERY_TIMEOUT 30
         PROPERTIES TIMEOUT 30
     )
