@@ -1,0 +1,53 @@
+# CMake and native build outputs
+/build/
+/out/
+/cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+CTestTestfile.cmake
+Testing/
+compile_commands.json
+
+# Compilers and linkers
+*.obj
+*.o
+*.pdb
+*.ilk
+*.idb
+*.exe
+*.dll
+*.lib
+*.a
+*.so
+*.dylib
+
+# IDE and editor state
+/.vs/
+/.vscode/
+/.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Runtime state and diagnostics
+*.journal
+!tests/fixtures/**/*.journal
+*.log
+logs/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Frontend dependencies and caches
+node_modules/
+.vite/
+.vitest/
+coverage/
+*.tsbuildinfo
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
