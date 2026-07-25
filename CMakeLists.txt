@@ -36,6 +36,39 @@ target_include_directories(backbook-domain
 target_compile_features(backbook-domain PUBLIC cxx_std_20)
 backbook_enable_warnings(backbook-domain)
 
+add_library(backbook-journal-codec STATIC
+    src/journal/codec.cpp
+    src/journal/command_batch.cpp
+    src/journal/fingerprint.cpp
+    src/journal/replay.cpp
+)
+add_library(backbook::journal-codec ALIAS backbook-journal-codec)
+
+target_include_directories(backbook-journal-codec
+    PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
+target_link_libraries(backbook-journal-codec PUBLIC backbook::domain)
+target_compile_features(backbook-journal-codec PUBLIC cxx_std_20)
+backbook_enable_warnings(backbook-journal-codec)
+
+add_library(backbook-storage STATIC
+    src/storage/journal_store.cpp
+)
+add_library(backbook::storage ALIAS backbook-storage)
+
+target_include_directories(backbook-storage
+    PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
+target_link_libraries(
+    backbook-storage
+    PUBLIC
+        backbook::journal-codec
+)
+target_compile_features(backbook-storage PUBLIC cxx_std_20)
+backbook_enable_warnings(backbook-storage)
+
 include(CTest)
 
 if(BUILD_TESTING)
@@ -77,6 +110,30 @@ if(BUILD_TESTING)
     include(GoogleTest)
     gtest_discover_tests(
         backbook-domain-tests
+        DISCOVERY_TIMEOUT 30
+        PROPERTIES TIMEOUT 30
+    )
+
+    add_executable(backbook-journal-tests
+        tests/unit/journal_codec_tests.cpp
+        tests/unit/journal_replay_tests.cpp
+        tests/unit/journal_storage_tests.cpp
+    )
+    target_include_directories(
+        backbook-journal-tests
+        PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests"
+    )
+    target_link_libraries(
+        backbook-journal-tests
+        PRIVATE
+            backbook::storage
+            GTest::gtest_main
+    )
+    backbook_enable_warnings(backbook-journal-tests)
+
+    gtest_discover_tests(
+        backbook-journal-tests
         DISCOVERY_TIMEOUT 30
         PROPERTIES TIMEOUT 30
     )

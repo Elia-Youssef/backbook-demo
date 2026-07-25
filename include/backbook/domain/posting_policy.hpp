@@ -14,6 +14,10 @@ struct ConfirmationPostingIds final {
     PostingId pay_payable_credit;
     PostingId receive_receivable_debit;
     PostingId receive_control_credit;
+
+    [[nodiscard]] friend bool operator==(
+        const ConfirmationPostingIds&,
+        const ConfirmationPostingIds&) = default;
 };
 
 struct ReversalPostingIds final {
@@ -21,6 +25,10 @@ struct ReversalPostingIds final {
     PostingId pay_payable_debit;
     PostingId receive_receivable_credit;
     PostingId receive_control_debit;
+
+    [[nodiscard]] friend bool operator==(
+        const ReversalPostingIds&,
+        const ReversalPostingIds&) = default;
 };
 
 enum class PostingPolicyError : std::uint8_t {

@@ -293,4 +293,17 @@ Outcome<LimitHierarchy, LimitError> LimitHierarchy::release(
     return Outcome<LimitHierarchy, LimitError>::success(std::move(next));
 }
 
+std::vector<LimitBalanceSnapshot> LimitHierarchy::snapshots() const {
+    std::vector<LimitBalanceSnapshot> result;
+    result.reserve(balances_.size());
+    for (const auto& [key, balance] : balances_) {
+        result.push_back(LimitBalanceSnapshot{
+            key.node,
+            key.currency,
+            balance.capacity,
+            balance.reserved});
+    }
+    return result;
+}
+
 }  // namespace backbook::domain
