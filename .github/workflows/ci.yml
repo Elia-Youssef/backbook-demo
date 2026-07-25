@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-msvc:
+    name: Windows / MSVC
+    runs-on: windows-2025
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Configure, build, and test
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsPath = (
+            & $vswhere `
+              -latest `
+              -products "*" `
+              -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+              -property installationPath |
+              Select-Object -First 1
+          )
+          if (-not $vsPath) {
+            throw "MSVC toolchain not found."
+          }
+
+          & "$vsPath\Common7\Tools\Launch-VsDevShell.ps1" `
+            -Arch amd64 `
+            -HostArch amd64 `
+            -SkipAutomaticLocation
+          Set-Location $env:GITHUB_WORKSPACE
+
+          where.exe cl.exe
+          cmake --preset msvc-debug
+          cmake --build --preset msvc-debug --parallel
+          ctest --preset msvc-debug --output-on-failure --timeout 30
+
+  linux-gcc:
+    name: Linux / GCC 13
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Configure, build, and test
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool_bin="$RUNNER_TEMP/gcc-13-bin"
+          mkdir -p "$tool_bin"
+          ln -s "$(command -v g++-13)" "$tool_bin/g++"
+          export PATH="$tool_bin:$PATH"
+
+          test "$(g++ -dumpfullversion -dumpversion | cut -d. -f1)" = "13"
+          cmake --preset gcc-debug
+          cmake --build --preset gcc-debug --parallel
+          ctest --preset gcc-debug --output-on-failure --timeout 30
+
+  quality-gate:
+    name: quality-gate
+    if: ${{ always() }}
+    needs:
+      - windows-msvc
+      - linux-gcc
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Require successful compiler jobs
+        shell: bash
+        env:
+          WINDOWS_RESULT: ${{ needs.windows-msvc.result }}
+          LINUX_RESULT: ${{ needs.linux-gcc.result }}
+        run: |
+          set -euo pipefail
+          test "$WINDOWS_RESULT" = "success"
+          test "$LINUX_RESULT" = "success"

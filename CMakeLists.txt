@@ -14,7 +14,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 include(cmake/CompilerWarnings.cmake)
 
 add_library(backbook-domain STATIC
+    src/domain/date.cpp
     src/domain/domain.cpp
+    src/domain/money.cpp
 )
 add_library(backbook::domain ALIAS backbook-domain)
 
@@ -40,7 +42,11 @@ if(BUILD_TESTING)
     FetchContent_MakeAvailable(googletest)
 
     add_executable(backbook-domain-tests
+        tests/unit/date_tests.cpp
         tests/unit/domain_smoke_tests.cpp
+        tests/unit/id_tests.cpp
+        tests/unit/money_tests.cpp
+        tests/unit/outcome_tests.cpp
     )
     target_link_libraries(backbook-domain-tests
         PRIVATE
