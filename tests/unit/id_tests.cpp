@@ -28,6 +28,7 @@ static_assert(!std::is_same_v<TradeId, BookId>);
 static_assert(!std::is_same_v<BookId, CounterpartyId>);
 static_assert(!std::is_same_v<NettingSetId, CommandId>);
 static_assert(!std::is_same_v<CommandId, PostingId>);
+static_assert(std::is_same_v<std::underlying_type_t<IdError>, std::uint8_t>);
 static_assert(!EqualityComparableAcrossTypes<TradeId, BookId>);
 static_assert(!std::is_constructible_v<TradeId, std::string>);
 static_assert(!std::is_constructible_v<TradeId, std::string_view>);

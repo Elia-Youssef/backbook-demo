@@ -4,13 +4,14 @@
 
 #include <compare>
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <utility>
 
 namespace backbook::domain {
 
-enum class IdError {
+enum class IdError : std::uint8_t {
     Empty,
     TooLong,
     InvalidFirstCharacter,

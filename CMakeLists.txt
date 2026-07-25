@@ -16,7 +16,13 @@ include(cmake/CompilerWarnings.cmake)
 add_library(backbook-domain STATIC
     src/domain/date.cpp
     src/domain/domain.cpp
+    src/domain/fx_terms.cpp
+    src/domain/ledger.cpp
+    src/domain/ledger_totals.cpp
+    src/domain/lifecycle.cpp
     src/domain/money.cpp
+    src/domain/posting_policy.cpp
+    src/domain/trade.cpp
 )
 add_library(backbook::domain ALIAS backbook-domain)
 
@@ -43,10 +49,17 @@ if(BUILD_TESTING)
 
     add_executable(backbook-domain-tests
         tests/unit/date_tests.cpp
+        tests/unit/domain_scenario_tests.cpp
         tests/unit/domain_smoke_tests.cpp
+        tests/unit/fx_terms_tests.cpp
         tests/unit/id_tests.cpp
+        tests/unit/ledger_tests.cpp
+        tests/unit/ledger_totals_tests.cpp
+        tests/unit/lifecycle_tests.cpp
         tests/unit/money_tests.cpp
         tests/unit/outcome_tests.cpp
+        tests/unit/posting_policy_tests.cpp
+        tests/unit/trade_tests.cpp
     )
     target_link_libraries(backbook-domain-tests
         PRIVATE
