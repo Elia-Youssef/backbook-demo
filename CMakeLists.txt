@@ -12,6 +12,29 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 include(cmake/CompilerWarnings.cmake)
+include(FetchContent)
+
+set(HTTPLIB_INSTALL OFF CACHE BOOL "" FORCE)
+set(HTTPLIB_TEST OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    cpp_httplib
+    URL
+        https://github.com/yhirose/cpp-httplib/archive/d66d9a95997d51a8ba9822a611d1267757741535.tar.gz
+    URL_HASH
+        SHA256=5a01b9431d83a521d715b7adebe39db47b1dbde9f6d6c1284d66ff5ea8a031b1
+)
+
+set(JSON_BuildTests OFF CACHE INTERNAL "")
+set(JSON_Install OFF CACHE INTERNAL "")
+FetchContent_Declare(
+    nlohmann_json
+    URL
+        https://github.com/nlohmann/json/archive/65ee68451d8eb2b5f3a30b410476ab83deb3289b.tar.gz
+    URL_HASH
+        SHA256=13ef31d691947940a08909f8e0772f1d7d68e5da1678ee812a49c4bb0c996b2f
+)
+
+FetchContent_MakeAvailable(cpp_httplib nlohmann_json)
 
 add_library(backbook-domain STATIC
     src/domain/date.cpp
@@ -87,11 +110,42 @@ target_link_libraries(
 target_compile_features(backbook-service PUBLIC cxx_std_20)
 backbook_enable_warnings(backbook-service)
 
+add_library(backbook-server-core STATIC
+    src/server/demo.cpp
+    src/server/http_server.cpp
+    src/server/json_codec.cpp
+)
+add_library(backbook::server-core ALIAS backbook-server-core)
+
+target_include_directories(backbook-server-core
+    PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
+target_link_libraries(
+    backbook-server-core
+    PUBLIC
+        backbook::service
+    PRIVATE
+        httplib::httplib
+        nlohmann_json::nlohmann_json
+)
+target_compile_features(backbook-server-core PUBLIC cxx_std_20)
+backbook_enable_warnings(backbook-server-core)
+
+add_executable(backbook-server
+    src/server/main.cpp
+)
+target_link_libraries(
+    backbook-server
+    PRIVATE
+        backbook::server-core
+)
+target_compile_features(backbook-server PRIVATE cxx_std_20)
+backbook_enable_warnings(backbook-server)
+
 include(CTest)
 
 if(BUILD_TESTING)
-    include(FetchContent)
-
     set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
     FetchContent_Declare(
         googletest
@@ -176,5 +230,27 @@ if(BUILD_TESTING)
         backbook-service-tests
         DISCOVERY_TIMEOUT 30
         PROPERTIES TIMEOUT 30
+    )
+
+    add_executable(backbook-http-tests
+        tests/http/demo_tests.cpp
+        tests/http/http_server_tests.cpp
+    )
+    target_link_libraries(
+        backbook-http-tests
+        PRIVATE
+            backbook::server-core
+            httplib::httplib
+            nlohmann_json::nlohmann_json
+            GTest::gtest_main
+    )
+    backbook_enable_warnings(backbook-http-tests)
+
+    gtest_discover_tests(
+        backbook-http-tests
+        DISCOVERY_TIMEOUT 30
+        PROPERTIES
+            TIMEOUT 30
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     )
 endif()
