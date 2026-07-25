@@ -113,6 +113,17 @@ struct LimitDefinition final {
         const LimitDefinition&) = default;
 };
 
+struct LimitBalanceSnapshot final {
+    LimitNode node;
+    Currency currency;
+    Money::MinorUnits capacity_minor_units;
+    Money::MinorUnits reserved_minor_units;
+
+    [[nodiscard]] friend bool operator==(
+        const LimitBalanceSnapshot&,
+        const LimitBalanceSnapshot&) = default;
+};
+
 enum class LimitErrorCode : std::uint8_t {
     InvalidCapacity,
     DuplicateDefinition,
@@ -156,6 +167,8 @@ public:
     [[nodiscard]] Outcome<LimitHierarchy, LimitError> release(
         const LimitPath& path,
         const Money& outgoing) const;
+
+    [[nodiscard]] std::vector<LimitBalanceSnapshot> snapshots() const;
 
     [[nodiscard]] friend bool operator==(
         const LimitHierarchy&,

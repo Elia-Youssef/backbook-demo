@@ -86,6 +86,11 @@ public:
         return trades_;
     }
 
+    [[nodiscard]] const std::map<TradeId, std::uint32_t>& current_versions()
+        const noexcept {
+        return current_versions_;
+    }
+
     [[nodiscard]] const std::vector<LedgerEntry>& ledger_entries()
         const noexcept {
         return ledger_entries_;
