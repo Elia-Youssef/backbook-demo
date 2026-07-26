@@ -13,19 +13,27 @@ import type {
   DashboardSnapshot,
 } from "./contracts";
 import { combineSnapshots, SnapshotMismatchError } from "./decode";
+import { startVisibilityAwarePolling } from "./polling";
 
-interface SnapshotLoadSuccess {
+export interface SnapshotLoadSuccess {
   ok: true;
   value: DashboardSnapshot;
 }
 
-interface SnapshotLoadFailure {
+export interface SnapshotLoadFailure {
   ok: false;
   error: ClientError;
   mismatch: boolean;
 }
 
-type SnapshotLoadResult = SnapshotLoadSuccess | SnapshotLoadFailure;
+export type SnapshotLoadResult = SnapshotLoadSuccess | SnapshotLoadFailure;
+
+export function snapshotAfterLoad(
+  current: DashboardSnapshot | null,
+  loaded: SnapshotLoadResult,
+): DashboardSnapshot | null {
+  return loaded.ok ? loaded.value : current;
+}
 
 async function loadSnapshot(): Promise<SnapshotLoadResult> {
   const [state, ledger, settlements] = await Promise.all([
@@ -87,7 +95,7 @@ export function useBackbook(): BackbookModel {
     snapshotRef.current = snapshot;
   }, [snapshot]);
 
-  const refresh = useCallback(async (): Promise<void> => {
+  const refreshOnce = useCallback(async (): Promise<boolean> => {
     const sequence = ++requestSequence.current;
     setConnection(snapshotRef.current === null ? "CONNECTING" : "REFRESHING");
     let loaded = await loadSnapshot();
@@ -95,24 +103,39 @@ export function useBackbook(): BackbookModel {
       loaded = await loadSnapshot();
     }
     if (sequence !== requestSequence.current) {
-      return;
+      return false;
     }
     if (loaded.ok) {
-      setSnapshot(loaded.value);
-      snapshotRef.current = loaded.value;
+      const nextSnapshot = snapshotAfterLoad(snapshotRef.current, loaded);
+      setSnapshot(nextSnapshot);
+      snapshotRef.current = nextSnapshot;
       setConnection("LIVE");
       setError(null);
-      return;
+      return true;
     }
     setError(loaded.error);
     setConnection(
       loaded.error.kind === "transport" ? "OFFLINE" : "STALE",
     );
+    return false;
   }, []);
 
+  const refresh = useCallback(async (): Promise<void> => {
+    await refreshOnce();
+  }, [refreshOnce]);
+
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    return startVisibilityAwarePolling(refreshOnce, {
+      isVisible: () => document.visibilityState !== "hidden",
+      setTimer: (callback, delayMilliseconds) =>
+        window.setTimeout(callback, delayMilliseconds),
+      clearTimer: (handle) => window.clearTimeout(handle),
+      subscribeToVisibility: (listener) => {
+        document.addEventListener("visibilitychange", listener);
+        return () => document.removeEventListener("visibilitychange", listener);
+      },
+    });
+  }, [refreshOnce]);
 
   const execute = useCallback(
     async (command: CommandEnvelope): Promise<boolean> => {

@@ -4,7 +4,9 @@
 #include <compare>
 #include <limits>
 #include <map>
+#include <optional>
 #include <utility>
+#include <vector>
 
 namespace backbook::domain {
 namespace {
@@ -20,27 +22,52 @@ struct SettlementKey final {
         const SettlementKey&) = default;
 };
 
-[[nodiscard]] bool checked_add(
-    Money::MinorUnits& total,
-    const Money::MinorUnits delta) noexcept {
-    constexpr auto minimum = std::numeric_limits<Money::MinorUnits>::min();
-    constexpr auto maximum = std::numeric_limits<Money::MinorUnits>::max();
-    if ((delta > 0 && total > maximum - delta) ||
-        (delta < 0 && total < minimum - delta)) {
-        return false;
+struct NetAccumulator final {
+    std::optional<SettlementDirection> direction;
+    std::vector<Money::MinorUnits> unmatched_amounts;
+};
+
+void add_cashflow(NetAccumulator& accumulator,
+                  const SettlementDirection direction,
+                  Money::MinorUnits amount) {
+    if (!accumulator.direction.has_value() ||
+        accumulator.direction == direction) {
+        accumulator.direction = direction;
+        accumulator.unmatched_amounts.push_back(amount);
+        return;
     }
-    total += delta;
-    return true;
+
+    while (amount > 0 && !accumulator.unmatched_amounts.empty()) {
+        auto& opposite = accumulator.unmatched_amounts.back();
+        if (opposite > amount) {
+            opposite -= amount;
+            amount = 0;
+        } else {
+            amount -= opposite;
+            accumulator.unmatched_amounts.pop_back();
+        }
+    }
+
+    if (amount > 0) {
+        accumulator.direction = direction;
+        accumulator.unmatched_amounts.push_back(amount);
+    } else if (accumulator.unmatched_amounts.empty()) {
+        accumulator.direction.reset();
+    }
 }
 
-[[nodiscard]] Outcome<Money::MinorUnits, SettlementError> absolute_net(
-    const Money::MinorUnits net) noexcept {
-    if (net == std::numeric_limits<Money::MinorUnits>::min()) {
-        return Outcome<Money::MinorUnits, SettlementError>::failure(
-            SettlementError::ArithmeticOverflow);
+[[nodiscard]] Outcome<Money::MinorUnits, SettlementError>
+total_magnitude(const NetAccumulator& accumulator) noexcept {
+    constexpr auto maximum = std::numeric_limits<Money::MinorUnits>::max();
+    Money::MinorUnits total = 0;
+    for (const auto amount : accumulator.unmatched_amounts) {
+        if (total > maximum - amount) {
+            return Outcome<Money::MinorUnits, SettlementError>::failure(
+                SettlementError::ArithmeticOverflow);
+        }
+        total += amount;
     }
-    return Outcome<Money::MinorUnits, SettlementError>::success(
-        net < 0 ? -net : net);
+    return Outcome<Money::MinorUnits, SettlementError>::success(total);
 }
 
 [[nodiscard]] bool settlement_less(
@@ -98,7 +125,7 @@ SettlementObligation::SettlementObligation(
 
 Outcome<std::vector<SettlementObligation>, SettlementError>
 derive_bilateral_settlements(const std::vector<Trade>& trades) {
-    std::map<SettlementKey, Money::MinorUnits> net_by_key;
+    std::map<SettlementKey, NetAccumulator> net_by_key;
 
     for (const Trade& trade : trades) {
         if (trade.state() != TradeState::Settled) {
@@ -126,31 +153,20 @@ derive_bilateral_settlements(const std::vector<Trade>& trades) {
             trade.terms().value_date(),
             receive.currency()};
 
-        auto& pay_total = net_by_key[pay_key];
-        if (!checked_add(pay_total, -pay.minor_units())) {
-            return Outcome<
-                std::vector<SettlementObligation>,
-                SettlementError>::failure(
-                SettlementError::ArithmeticOverflow);
-        }
-
-        auto& receive_total = net_by_key[receive_key];
-        if (!checked_add(receive_total, receive.minor_units())) {
-            return Outcome<
-                std::vector<SettlementObligation>,
-                SettlementError>::failure(
-                SettlementError::ArithmeticOverflow);
-        }
+        add_cashflow(net_by_key[pay_key], SettlementDirection::Outgoing,
+                     pay.minor_units());
+        add_cashflow(net_by_key[receive_key], SettlementDirection::Incoming,
+                     receive.minor_units());
     }
 
     std::vector<SettlementObligation> obligations;
     obligations.reserve(net_by_key.size());
-    for (const auto& [key, net] : net_by_key) {
-        if (net == 0) {
+    for (const auto& [key, accumulator] : net_by_key) {
+        if (!accumulator.direction.has_value()) {
             continue;
         }
 
-        const auto magnitude = absolute_net(net);
+        const auto magnitude = total_magnitude(accumulator);
         if (!magnitude) {
             return Outcome<
                 std::vector<SettlementObligation>,
@@ -165,12 +181,8 @@ derive_bilateral_settlements(const std::vector<Trade>& trades) {
         }
 
         obligations.push_back(detail::SettlementOperations::make(
-            key.counterparty_id,
-            key.netting_set_id,
-            key.value_date,
-            net < 0 ? SettlementDirection::Outgoing
-                    : SettlementDirection::Incoming,
-            std::move(amount).value()));
+            key.counterparty_id, key.netting_set_id, key.value_date,
+            *accumulator.direction, std::move(amount).value()));
     }
 
     std::sort(obligations.begin(), obligations.end(), settlement_less);

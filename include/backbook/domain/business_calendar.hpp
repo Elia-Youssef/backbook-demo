@@ -14,8 +14,8 @@ enum class HolidayCalendarError : std::uint8_t {
 
 class HolidayCalendar final {
 public:
-    [[nodiscard]] static Outcome<HolidayCalendar, HolidayCalendarError> create(
-        std::vector<IsoDate> holidays);
+    [[nodiscard]] static Outcome<HolidayCalendar, HolidayCalendarError>
+    create(std::vector<IsoDate> holidays);
 
     [[nodiscard]] bool is_business_day(const IsoDate& date) const noexcept;
 
@@ -33,20 +33,19 @@ enum class SettlementDateError : std::uint8_t {
     NoJointBusinessDayInMonth,
 };
 
-[[nodiscard]] bool is_joint_business_day(
-    const IsoDate& date,
-    const HolidayCalendar& first_calendar,
-    const HolidayCalendar& second_calendar) noexcept;
+[[nodiscard]] bool
+is_joint_business_day(const IsoDate& date,
+                      const HolidayCalendar& first_calendar,
+                      const HolidayCalendar& second_calendar) noexcept;
 
 [[nodiscard]] Outcome<IsoDate, SettlementDateError>
-adjust_modified_following(
-    const IsoDate& unadjusted_date,
-    const HolidayCalendar& first_calendar,
-    const HolidayCalendar& second_calendar);
+adjust_modified_following(const IsoDate& unadjusted_date,
+                          const HolidayCalendar& first_calendar,
+                          const HolidayCalendar& second_calendar);
 
-[[nodiscard]] Outcome<IsoDate, SettlementDateError> calculate_t_plus_two(
-    const IsoDate& trade_date,
-    const HolidayCalendar& first_calendar,
-    const HolidayCalendar& second_calendar);
+[[nodiscard]] Outcome<IsoDate, SettlementDateError>
+calculate_t_plus_two(const IsoDate& trade_date,
+                     const HolidayCalendar& first_calendar,
+                     const HolidayCalendar& second_calendar);
 
-}  // namespace backbook::domain
+} // namespace backbook::domain

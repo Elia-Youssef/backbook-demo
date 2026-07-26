@@ -24,6 +24,7 @@ enum class CommandServiceErrorCode : std::uint8_t {
     DuplicateJournalCommandId,
     SequenceExhausted,
     CommandEncodingFailure,
+    InvalidCanonicalRequest,
     IdempotencyConflict,
     DomainRejected,
     JournalEncodingFailure,
@@ -39,6 +40,7 @@ struct CommandServiceError final {
     std::optional<storage::JournalRecoveryError> recovery_error{};
     std::optional<journal::ReplayError> replay_error{};
     std::optional<CommandEncodingError> command_encoding_error{};
+    std::optional<CanonicalCommandRequestError> canonical_request_error{};
     std::optional<domain::StateError> state_error{};
     std::optional<journal::CodecError> codec_error{};
     std::optional<storage::JournalStoreError> store_error{};

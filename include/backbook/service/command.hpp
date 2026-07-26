@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <variant>
 
 namespace backbook::service {
@@ -80,7 +81,20 @@ enum class CommandEncodingError : std::uint8_t {
     SizeOverflow,
 };
 
+enum class CanonicalCommandRequestError : std::uint8_t {
+    Empty,
+    UnsupportedVersion,
+    Malformed,
+    CommandIdMismatch,
+    CommandEventMismatch,
+};
+
 [[nodiscard]] domain::Outcome<journal::Bytes, CommandEncodingError>
 canonical_command_bytes(const CommandEnvelope& envelope);
+
+[[nodiscard]] domain::Outcome<std::uint8_t, CanonicalCommandRequestError>
+validate_canonical_command_request(
+    std::span<const std::uint8_t> bytes,
+    const domain::CommandId& expected_command_id);
 
 }  // namespace backbook::service

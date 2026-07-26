@@ -44,6 +44,29 @@ CommandService::create(std::unique_ptr<storage::JournalStore> store,
             CommandServiceError>::failure(std::move(failure));
     }
 
+    for (const auto& batch : recovered.value().batches) {
+        const auto validated = validate_canonical_command_request(
+            batch.canonical_request(), batch.command_id());
+        if (!validated) {
+            auto failure =
+                service_error(CommandServiceErrorCode::InvalidCanonicalRequest);
+            failure.canonical_request_error = validated.error();
+            return domain::Outcome<
+                std::unique_ptr<CommandService>,
+                CommandServiceError>::failure(std::move(failure));
+        }
+        if (batch.events().size() == 1U &&
+            validated.value() != batch.events().front().index() + 1U) {
+            auto failure =
+                service_error(CommandServiceErrorCode::InvalidCanonicalRequest);
+            failure.canonical_request_error =
+                CanonicalCommandRequestError::CommandEventMismatch;
+            return domain::Outcome<
+                std::unique_ptr<CommandService>,
+                CommandServiceError>::failure(std::move(failure));
+        }
+    }
+
     auto replayed =
         journal::replay(std::move(initial_limits), recovered.value().batches);
     if (!replayed) {
@@ -130,9 +153,8 @@ CommandService::execute(const CommandEnvelope& envelope) {
             auto failure =
                 service_error(CommandServiceErrorCode::DomainRejected);
             failure.state_error = evaluated.error().state_error;
-            return domain::Outcome<
-                CommandReceipt,
-                CommandServiceError>::failure(std::move(failure));
+            return domain::Outcome<CommandReceipt, CommandServiceError>::
+                failure(std::move(failure));
         }
         return domain::Outcome<CommandReceipt, CommandServiceError>::failure(
             service_error(CommandServiceErrorCode::InvariantViolation));
@@ -140,11 +162,8 @@ CommandService::execute(const CommandEnvelope& envelope) {
     auto evaluation = std::move(evaluated).value();
 
     auto batch = journal::CommandBatch::create(
-        next_sequence_,
-        envelope.command_id,
-        canonical.value(),
-        std::vector<journal::Event>{evaluation.event},
-        evaluation.result);
+        next_sequence_, envelope.command_id, canonical.value(),
+        std::vector<journal::Event>{evaluation.event}, evaluation.result);
     if (!batch) {
         return domain::Outcome<CommandReceipt, CommandServiceError>::failure(
             service_error(CommandServiceErrorCode::InvariantViolation));
@@ -159,9 +178,8 @@ CommandService::execute(const CommandEnvelope& envelope) {
             std::move(failure));
     }
 
-    auto published_snapshot =
-        std::make_shared<const domain::State>(
-            std::move(evaluation.prospective_state));
+    auto published_snapshot = std::make_shared<const domain::State>(
+        std::move(evaluation.prospective_state));
     CommandReceipt receipt{evaluation.result, false};
 
     std::map<domain::CommandId, IdempotencyRecord> pending;

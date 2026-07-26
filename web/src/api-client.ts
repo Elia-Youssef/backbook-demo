@@ -30,7 +30,7 @@ async function request<Value>(
   init?: RequestInit,
 ): Promise<ClientResult<Value>> {
   const controller = new AbortController();
-  const timeout = window.setTimeout(
+  const timeout = globalThis.setTimeout(
     () => controller.abort(),
     requestTimeoutMilliseconds,
   );
@@ -88,7 +88,7 @@ async function request<Value>(
       },
     };
   } finally {
-    window.clearTimeout(timeout);
+    globalThis.clearTimeout(timeout);
   }
 }
 

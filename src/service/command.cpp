@@ -3,7 +3,9 @@
 #include "backbook/domain/money.hpp"
 
 #include <bit>
+#include <cstddef>
 #include <limits>
+#include <span>
 #include <string_view>
 #include <type_traits>
 #include <utility>
@@ -62,6 +64,89 @@ public:
 
 private:
     journal::Bytes bytes_;
+};
+
+class Reader final {
+public:
+    explicit Reader(const std::span<const std::uint8_t> bytes) noexcept
+        : bytes_(bytes) {}
+
+    [[nodiscard]] bool read_u8(std::uint8_t& value) noexcept {
+        if (remaining() < 1U) {
+            return false;
+        }
+        value = bytes_[offset_++];
+        return true;
+    }
+
+    [[nodiscard]] bool read_u16(std::uint16_t& value) noexcept {
+        if (remaining() < 2U) {
+            return false;
+        }
+        value = static_cast<std::uint16_t>(bytes_[offset_]) |
+                static_cast<std::uint16_t>(
+                    static_cast<std::uint16_t>(bytes_[offset_ + 1U]) << 8U);
+        offset_ += 2U;
+        return true;
+    }
+
+    [[nodiscard]] bool skip(const std::size_t count) noexcept {
+        if (remaining() < count) {
+            return false;
+        }
+        offset_ += count;
+        return true;
+    }
+
+    [[nodiscard]] bool read_id(std::span<const std::uint8_t>& value) noexcept {
+        std::uint16_t length = 0U;
+        if (!read_u16(length) || length == 0U || length > 64U ||
+            remaining() < length) {
+            return false;
+        }
+        value = bytes_.subspan(offset_, length);
+        offset_ += length;
+        return valid_id(value);
+    }
+
+    [[nodiscard]] bool finished() const noexcept {
+        return offset_ == bytes_.size();
+    }
+
+private:
+    [[nodiscard]] static bool
+    is_initial_id_byte(const std::uint8_t value) noexcept {
+        return (value >= static_cast<std::uint8_t>('A') &&
+                value <= static_cast<std::uint8_t>('Z')) ||
+               (value >= static_cast<std::uint8_t>('a') &&
+                value <= static_cast<std::uint8_t>('z')) ||
+               (value >= static_cast<std::uint8_t>('0') &&
+                value <= static_cast<std::uint8_t>('9'));
+    }
+
+    [[nodiscard]] static bool
+    valid_id(const std::span<const std::uint8_t> value) noexcept {
+        if (value.empty() || !is_initial_id_byte(value.front())) {
+            return false;
+        }
+        for (const auto byte : value.subspan(1U)) {
+            if (!is_initial_id_byte(byte) &&
+                byte != static_cast<std::uint8_t>('.') &&
+                byte != static_cast<std::uint8_t>('_') &&
+                byte != static_cast<std::uint8_t>(':') &&
+                byte != static_cast<std::uint8_t>('-')) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    [[nodiscard]] std::size_t remaining() const noexcept {
+        return bytes_.size() - offset_;
+    }
+
+    std::span<const std::uint8_t> bytes_;
+    std::size_t offset_{0U};
 };
 
 template <typename IdType> void write_id(Writer& writer, const IdType& id) {
@@ -168,6 +253,61 @@ void write_command(Writer& writer, const Command& command) {
         command);
 }
 
+[[nodiscard]] bool read_id(Reader& reader) {
+    std::span<const std::uint8_t> unused;
+    return reader.read_id(unused);
+}
+
+[[nodiscard]] bool read_money(Reader& reader) {
+    std::uint8_t currency = 0U;
+    return reader.read_u8(currency) && currency <= 2U &&
+           reader.skip(sizeof(std::int64_t));
+}
+
+[[nodiscard]] bool read_terms(Reader& reader) {
+    std::uint8_t instrument = 0U;
+    return reader.read_u8(instrument) && instrument <= 1U &&
+           reader.skip(sizeof(std::int32_t) * 2U) && read_money(reader) &&
+           read_money(reader);
+}
+
+[[nodiscard]] bool read_confirmation_ids(Reader& reader) {
+    return read_id(reader) && read_id(reader) && read_id(reader) &&
+           read_id(reader);
+}
+
+[[nodiscard]] bool read_reversal_ids(Reader& reader) {
+    return read_id(reader) && read_id(reader) && read_id(reader) &&
+           read_id(reader);
+}
+
+[[nodiscard]] bool read_command_body(Reader& reader, const std::uint8_t tag) {
+    switch (tag) {
+    case book_trade_tag:
+        return read_id(reader) && read_id(reader) && read_id(reader) &&
+               read_id(reader) && read_terms(reader);
+    case confirm_trade_tag:
+        return read_id(reader) && reader.skip(sizeof(std::uint32_t)) &&
+               read_confirmation_ids(reader);
+    case amend_trade_tag:
+        return read_id(reader) && reader.skip(sizeof(std::uint32_t)) &&
+               read_terms(reader) && read_reversal_ids(reader) &&
+               read_confirmation_ids(reader);
+    case cancel_trade_tag: {
+        std::uint8_t has_reversal_ids = 0U;
+        if (!read_id(reader) || !reader.skip(sizeof(std::uint32_t)) ||
+            !reader.read_u8(has_reversal_ids) || has_reversal_ids > 1U) {
+            return false;
+        }
+        return has_reversal_ids == 0U || read_reversal_ids(reader);
+    }
+    case run_eod_tag:
+        return reader.skip(sizeof(std::int32_t));
+    default:
+        return false;
+    }
+}
+
 }  // namespace
 
 domain::Outcome<journal::Bytes, CommandEncodingError>
@@ -184,6 +324,54 @@ canonical_command_bytes(const CommandEnvelope& envelope) {
     write_command(writer, envelope.command);
     return domain::Outcome<journal::Bytes, CommandEncodingError>::success(
         writer.take());
+}
+
+domain::Outcome<std::uint8_t, CanonicalCommandRequestError>
+validate_canonical_command_request(
+    const std::span<const std::uint8_t> bytes,
+    const domain::CommandId& expected_command_id) {
+    if (bytes.empty()) {
+        return domain::Outcome<std::uint8_t, CanonicalCommandRequestError>::
+            failure(CanonicalCommandRequestError::Empty);
+    }
+
+    Reader reader(bytes);
+    std::uint8_t version = 0U;
+    if (!reader.read_u8(version)) {
+        return domain::Outcome<std::uint8_t, CanonicalCommandRequestError>::
+            failure(CanonicalCommandRequestError::Empty);
+    }
+    if (version != command_request_format_version) {
+        return domain::Outcome<std::uint8_t, CanonicalCommandRequestError>::
+            failure(CanonicalCommandRequestError::UnsupportedVersion);
+    }
+
+    std::span<const std::uint8_t> encoded_command_id;
+    if (!reader.read_id(encoded_command_id)) {
+        return domain::Outcome<std::uint8_t, CanonicalCommandRequestError>::
+            failure(CanonicalCommandRequestError::Malformed);
+    }
+    const auto expected = expected_command_id.value();
+    if (encoded_command_id.size() != expected.size()) {
+        return domain::Outcome<std::uint8_t, CanonicalCommandRequestError>::
+            failure(CanonicalCommandRequestError::CommandIdMismatch);
+    }
+    for (std::size_t index = 0U; index < encoded_command_id.size(); ++index) {
+        if (encoded_command_id[index] !=
+            static_cast<std::uint8_t>(expected[index])) {
+            return domain::Outcome<std::uint8_t, CanonicalCommandRequestError>::
+                failure(CanonicalCommandRequestError::CommandIdMismatch);
+        }
+    }
+
+    std::uint8_t tag = 0U;
+    if (!reader.read_u8(tag) || !read_command_body(reader, tag) ||
+        !reader.finished()) {
+        return domain::Outcome<std::uint8_t, CanonicalCommandRequestError>::
+            failure(CanonicalCommandRequestError::Malformed);
+    }
+    return domain::Outcome<std::uint8_t, CanonicalCommandRequestError>::success(
+        tag);
 }
 
 }  // namespace backbook::service

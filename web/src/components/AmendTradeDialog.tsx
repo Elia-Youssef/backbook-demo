@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { FormEvent } from "react";
 
 import {
   newCommandId,
   newConfirmationPostingIds,
   newReversalPostingIds,
+  prepareCommandSubmission,
 } from "../commands";
+import type { PreparedCommandSubmission } from "../commands";
 import type {
   CommandEnvelope,
   Currency,
@@ -55,6 +57,7 @@ export function AmendTradeDialog({
     moneyInputValue(trade.terms.receive),
   );
   const [validation, setValidation] = useState<string | null>(null);
+  const pendingSubmission = useRef<PreparedCommandSubmission | null>(null);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -69,25 +72,39 @@ export function AmendTradeDialog({
       return;
     }
     try {
-      const command: CommandEnvelope = {
-        commandId: newCommandId(),
+      const replacementTerms = {
+        kind,
+        tradeDate: decodeIsoDate(tradeDate),
+        valueDate: decodeIsoDate(valueDate),
+        pay,
+        receive,
+      };
+      const signature = JSON.stringify({
         type: "AMEND_TRADE",
         expectedVersion: trade.version,
         payload: {
           tradeId: trade.tradeId,
-          replacementTerms: {
-            kind,
-            tradeDate: decodeIsoDate(tradeDate),
-            valueDate: decodeIsoDate(valueDate),
-            pay,
-            receive,
-          },
-          reversalPostingIds: newReversalPostingIds(),
-          replacementPostingIds: newConfirmationPostingIds(),
+          replacementTerms,
         },
-      };
+      });
+      const prepared = prepareCommandSubmission(
+        pendingSubmission.current,
+        signature,
+        (): CommandEnvelope => ({
+          commandId: newCommandId(),
+          type: "AMEND_TRADE",
+          expectedVersion: trade.version,
+          payload: {
+            tradeId: trade.tradeId,
+            replacementTerms,
+            reversalPostingIds: newReversalPostingIds(),
+            replacementPostingIds: newConfirmationPostingIds(),
+          },
+        }),
+      );
+      pendingSubmission.current = prepared;
       setValidation(null);
-      if (await onSubmit(command)) {
+      if (await onSubmit(prepared.command)) {
         onClose();
       }
     } catch {

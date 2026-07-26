@@ -1069,6 +1069,7 @@ problem_from_service_error(const service::CommandServiceError& error) {
     case service::CommandServiceErrorCode::DuplicateJournalCommandId:
     case service::CommandServiceErrorCode::SequenceExhausted:
     case service::CommandServiceErrorCode::CommandEncodingFailure:
+    case service::CommandServiceErrorCode::InvalidCanonicalRequest:
     case service::CommandServiceErrorCode::JournalEncodingFailure:
     case service::CommandServiceErrorCode::InvariantViolation:
         return internal_problem();

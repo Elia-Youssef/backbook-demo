@@ -56,17 +56,17 @@ to build or run the C++ demo.
 Run from Visual Studio Developer PowerShell:
 
 ```powershell
-cmake --preset msvc-debug
-cmake --build --preset msvc-debug --parallel
-.\build\msvc-debug\backbook-server.exe --demo
+cmake --preset msvc-release
+cmake --build --preset msvc-release --parallel
+.\build\msvc-release\backbook-server.exe --demo
 ```
 
 ### Linux
 
 ```bash
-cmake --preset gcc-debug
-cmake --build --preset gcc-debug --parallel
-./build/gcc-debug/backbook-server --demo
+cmake --preset gcc-release
+cmake --build --preset gcc-release --parallel
+./build/gcc-release/backbook-server --demo
 ```
 
 Open `http://127.0.0.1:8080`. Demo mode creates an isolated journal in the
@@ -147,20 +147,22 @@ GET  /healthz
 Success responses use `application/json`. Errors use
 `application/problem+json`. Command bodies are limited to 64 KiB. The frontend
 loads state, ledger, and settlement responses together and displays a new
-snapshot only when their state versions and fingerprints agree.
+snapshot only when their state versions and fingerprints agree. It polls every
+five seconds while visible, pauses when hidden, and backs off after failed
+reads. Retrying an unchanged write reuses its exact command request.
 
 ## Test and rebuild
 
 Run the native suite:
 
 ```powershell
-ctest --preset msvc-debug --output-on-failure
+ctest --preset msvc-release --output-on-failure
 ```
 
 or:
 
 ```bash
-ctest --preset gcc-debug --output-on-failure
+ctest --preset gcc-release --output-on-failure
 ```
 
 Rebuild the frontend with Node.js 24 and the committed lockfile:
@@ -188,8 +190,8 @@ This preset compiles and links the native suite with AddressSanitizer and
 UndefinedBehaviorSanitizer, enables leak detection, and stops on the first
 reported sanitizer failure.
 
-The current verification baseline is 187 native tests on MSVC 19.51
-(14.51 toolset), GCC 13.3.0, and Clang 18.1.3 with ASan and UBSan, plus 9
+The current verification baseline is 191 native tests on MSVC 19.51
+(14.51 toolset), GCC 13.3.0, and Clang 18.1.3 with ASan and UBSan, plus 16
 frontend tests on Node.js 24. See [Verification](docs/verification.md) for the
 release checklist.
 

@@ -29,4 +29,4 @@ struct CommandEvaluation final {
 [[nodiscard]] domain::Outcome<CommandEvaluation, CommandEvaluationError>
 evaluate_command(const domain::State& current, const Command& command);
 
-}  // namespace backbook::service
+} // namespace backbook::service

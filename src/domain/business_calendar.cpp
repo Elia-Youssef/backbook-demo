@@ -12,13 +12,11 @@ namespace {
 [[nodiscard]] bool is_weekend(const IsoDate& date) noexcept {
     const auto weekday =
         std::chrono::weekday{std::chrono::sys_days{date.value()}};
-    return weekday == std::chrono::Saturday ||
-           weekday == std::chrono::Sunday;
+    return weekday == std::chrono::Saturday || weekday == std::chrono::Sunday;
 }
 
-[[nodiscard]] Outcome<IsoDate, SettlementDateError> offset_date(
-    const IsoDate& date,
-    const std::int32_t offset) {
+[[nodiscard]] Outcome<IsoDate, SettlementDateError>
+offset_date(const IsoDate& date, const std::int32_t offset) {
     const auto epoch_days =
         static_cast<std::int64_t>(date.to_epoch_days()) + offset;
     if (epoch_days < std::numeric_limits<std::int32_t>::min() ||
@@ -35,16 +33,15 @@ namespace {
     return Outcome<IsoDate, SettlementDateError>::success(candidate.value());
 }
 
-}  // namespace
+} // namespace
 
 HolidayCalendar::HolidayCalendar(std::vector<IsoDate> holidays) noexcept
     : holidays_(std::move(holidays)) {}
 
-Outcome<HolidayCalendar, HolidayCalendarError> HolidayCalendar::create(
-    std::vector<IsoDate> holidays) {
+Outcome<HolidayCalendar, HolidayCalendarError>
+HolidayCalendar::create(std::vector<IsoDate> holidays) {
     std::sort(holidays.begin(), holidays.end());
-    const auto duplicate =
-        std::adjacent_find(holidays.begin(), holidays.end());
+    const auto duplicate = std::adjacent_find(holidays.begin(), holidays.end());
     if (duplicate != holidays.end()) {
         return Outcome<HolidayCalendar, HolidayCalendarError>::failure(
             HolidayCalendarError::DuplicateHoliday);
@@ -59,20 +56,19 @@ bool HolidayCalendar::is_business_day(const IsoDate& date) const noexcept {
            !std::binary_search(holidays_.begin(), holidays_.end(), date);
 }
 
-bool is_joint_business_day(
-    const IsoDate& date,
-    const HolidayCalendar& first_calendar,
-    const HolidayCalendar& second_calendar) noexcept {
+bool is_joint_business_day(const IsoDate& date,
+                           const HolidayCalendar& first_calendar,
+                           const HolidayCalendar& second_calendar) noexcept {
     return first_calendar.is_business_day(date) &&
            second_calendar.is_business_day(date);
 }
 
-Outcome<IsoDate, SettlementDateError> adjust_modified_following(
-    const IsoDate& unadjusted_date,
-    const HolidayCalendar& first_calendar,
-    const HolidayCalendar& second_calendar) {
-    if (is_joint_business_day(
-            unadjusted_date, first_calendar, second_calendar)) {
+Outcome<IsoDate, SettlementDateError>
+adjust_modified_following(const IsoDate& unadjusted_date,
+                          const HolidayCalendar& first_calendar,
+                          const HolidayCalendar& second_calendar) {
+    if (is_joint_business_day(unadjusted_date, first_calendar,
+                              second_calendar)) {
         return Outcome<IsoDate, SettlementDateError>::success(unadjusted_date);
     }
 
@@ -84,8 +80,7 @@ Outcome<IsoDate, SettlementDateError> adjust_modified_following(
             break;
         }
         following = next.value();
-        if (is_joint_business_day(
-                following, first_calendar, second_calendar)) {
+        if (is_joint_business_day(following, first_calendar, second_calendar)) {
             return Outcome<IsoDate, SettlementDateError>::success(following);
         }
     }
@@ -98,17 +93,16 @@ Outcome<IsoDate, SettlementDateError> adjust_modified_following(
                 SettlementDateError::NoJointBusinessDayInMonth);
         }
         preceding = previous.value();
-        if (is_joint_business_day(
-                preceding, first_calendar, second_calendar)) {
+        if (is_joint_business_day(preceding, first_calendar, second_calendar)) {
             return Outcome<IsoDate, SettlementDateError>::success(preceding);
         }
     }
 }
 
-Outcome<IsoDate, SettlementDateError> calculate_t_plus_two(
-    const IsoDate& trade_date,
-    const HolidayCalendar& first_calendar,
-    const HolidayCalendar& second_calendar) {
+Outcome<IsoDate, SettlementDateError>
+calculate_t_plus_two(const IsoDate& trade_date,
+                     const HolidayCalendar& first_calendar,
+                     const HolidayCalendar& second_calendar) {
     constexpr std::uint8_t settlement_lag = 2U;
 
     auto candidate = trade_date;
@@ -119,14 +113,13 @@ Outcome<IsoDate, SettlementDateError> calculate_t_plus_two(
             return Outcome<IsoDate, SettlementDateError>::failure(next.error());
         }
         candidate = next.value();
-        if (is_joint_business_day(
-                candidate, first_calendar, second_calendar)) {
+        if (is_joint_business_day(candidate, first_calendar, second_calendar)) {
             ++elapsed_business_days;
         }
     }
 
-    return adjust_modified_following(
-        candidate, first_calendar, second_calendar);
+    return adjust_modified_following(candidate, first_calendar,
+                                     second_calendar);
 }
 
-}  // namespace backbook::domain
+} // namespace backbook::domain

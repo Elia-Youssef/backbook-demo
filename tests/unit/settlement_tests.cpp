@@ -332,6 +332,33 @@ TEST(SettlementTest, OutputIsStableSortedAndIndependentOfInputOrder) {
     EXPECT_EQ(forward.value()[5U].amount().currency(), Currency::Kwd);
 }
 
+TEST(SettlementTest, RepresentableNetDoesNotDependOnIntermediateCashflowOrder) {
+    constexpr auto maximum = std::numeric_limits<std::int64_t>::max();
+    std::vector<Trade> trades;
+    trades.push_back(settled(
+        captured_trade("TRD-1", "BOOK-FX-1", "CPTY-A", "NET-A", "2026-07-27",
+                       Currency::Jpy, 1, Currency::Usd, maximum)));
+    trades.push_back(settled(
+        captured_trade("TRD-2", "BOOK-FX-2", "CPTY-A", "NET-A", "2026-07-27",
+                       Currency::Jpy, 1, Currency::Usd, 1)));
+    trades.push_back(settled(
+        captured_trade("TRD-3", "BOOK-FX-1", "CPTY-A", "NET-A", "2026-07-27",
+                       Currency::Usd, 1, Currency::Jpy, 1)));
+
+    const auto forward = derive_bilateral_settlements(trades);
+    std::reverse(trades.begin(), trades.end());
+    const auto reverse = derive_bilateral_settlements(trades);
+
+    ASSERT_TRUE(forward);
+    ASSERT_TRUE(reverse);
+    EXPECT_EQ(forward.value(), reverse.value());
+    const auto* usd = find_obligation(forward.value(), "CPTY-A", "NET-A",
+                                      "2026-07-27", Currency::Usd);
+    ASSERT_NE(usd, nullptr);
+    EXPECT_EQ(usd->direction(), SettlementDirection::Incoming);
+    EXPECT_EQ(usd->amount().minor_units(), maximum);
+}
+
 TEST(SettlementTest, ReportsPositiveAggregationOverflow) {
     constexpr auto maximum = std::numeric_limits<std::int64_t>::max();
     std::vector<Trade> trades;

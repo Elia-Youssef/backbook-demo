@@ -92,8 +92,10 @@ strings, ordered collections, epoch-day dates, and currency plus signed
 Recovery scans frames from the beginning and folds valid batches into fresh
 state. An incomplete final frame is a torn tail and is truncated to the last
 valid boundary. A complete frame with a bad CRC, an unsupported version, or a
-duplicate command ID is fatal corruption. Valid replay rebuilds idempotency,
-verifies ledger totals, and publishes the recovered snapshot.
+duplicate command ID is fatal corruption. Before replay, the service validates
+the canonical command-request version, complete request shape, embedded command
+ID, and command-to-event tag. Valid replay rebuilds idempotency, verifies ledger
+totals, and publishes the recovered snapshot.
 
 The canonical fingerprint is computed from an ordered state export. FNV-1a is
 used only to compare deterministic state; it is not a security primitive.

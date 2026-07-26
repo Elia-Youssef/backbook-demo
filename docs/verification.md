@@ -8,18 +8,19 @@ row passes and the public workflow reports a successful `quality-gate`.
 
 | Surface | Required toolchain | Current verified result |
 | --- | --- | --- |
-| Native Windows | MSVC 19.51 (14.51 toolset), CMake 3.24+, Ninja | 170/170 tests |
-| Native Linux | GCC 13.3.0, CMake 3.24+, Ninja | 170/170 tests |
-| Frontend | Node.js 24, npm from the committed lockfile | Typecheck, 9/9 tests, production build |
+| Native Windows | MSVC 19.51 (14.51 toolset), CMake 3.24+, Ninja | 191/191 tests |
+| Native Linux | GCC 13.3.0, CMake 3.24+, Ninja | 191/191 tests |
+| Native sanitizers | Clang 18.1.3, ASan, UBSan, CMake 3.24+, Ninja | 191/191 tests |
+| Frontend | Node.js 24, npm from the committed lockfile | Typecheck, 16/16 tests, production build |
 
 ## Windows
 
 Run from Visual Studio Developer PowerShell:
 
 ```powershell
-cmake --preset msvc-debug
-cmake --build --preset msvc-debug --parallel
-ctest --preset msvc-debug --output-on-failure --timeout 30
+cmake --preset msvc-release
+cmake --build --preset msvc-release --parallel
+ctest --preset msvc-release --output-on-failure --timeout 30
 ```
 
 ## Linux
@@ -27,9 +28,9 @@ ctest --preset msvc-debug --output-on-failure --timeout 30
 Build inside a Linux filesystem:
 
 ```bash
-cmake --preset gcc-debug
-cmake --build --preset gcc-debug --parallel
-ctest --preset gcc-debug --output-on-failure --timeout 30
+cmake --preset gcc-release
+cmake --build --preset gcc-release --parallel
+ctest --preset gcc-release --output-on-failure --timeout 30
 ```
 
 Confirm the compiler major version:
