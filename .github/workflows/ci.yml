@@ -78,6 +78,42 @@ jobs:
           cmake --build --preset gcc-debug --parallel
           ctest --preset gcc-debug --output-on-failure --timeout 30
 
+  linux-clang-sanitizers:
+    name: Ubuntu / Clang 18 / ASan + UBSan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Clang sanitizer toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install \
+            --yes \
+            --no-install-recommends \
+            clang-18 \
+            libclang-rt-18-dev \
+            llvm-18
+
+      - name: Configure, build, and test
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(clang++-18 -dumpversion | cut -d. -f1)" = "18"
+          export ASAN_SYMBOLIZER_PATH="$(command -v llvm-symbolizer-18)"
+
+          cmake --preset clang-sanitizers
+          cmake --build --preset clang-sanitizers --parallel
+          ctest \
+            --preset clang-sanitizers \
+            --output-on-failure \
+            --timeout 30
+
   frontend:
     name: Frontend / Node 24
     runs-on: ubuntu-24.04
@@ -112,6 +148,7 @@ jobs:
     needs:
       - windows-msvc
       - linux-gcc
+      - linux-clang-sanitizers
       - frontend
     runs-on: ubuntu-24.04
     timeout-minutes: 2
@@ -121,9 +158,11 @@ jobs:
         env:
           WINDOWS_RESULT: ${{ needs.windows-msvc.result }}
           LINUX_RESULT: ${{ needs.linux-gcc.result }}
+          CLANG_SANITIZERS_RESULT: ${{ needs.linux-clang-sanitizers.result }}
           FRONTEND_RESULT: ${{ needs.frontend.result }}
         run: |
           set -euo pipefail
           test "$WINDOWS_RESULT" = "success"
           test "$LINUX_RESULT" = "success"
+          test "$CLANG_SANITIZERS_RESULT" = "success"
           test "$FRONTEND_RESULT" = "success"
