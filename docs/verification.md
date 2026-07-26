@@ -1,8 +1,9 @@
 # Verification
 
-This checklist is the evidence required before creating `v0.1.0-demo`. Run it
-from a clean checkout of the candidate commit. Do not create the tag until every
-row passes and the public workflow reports a successful `quality-gate`.
+This checklist is the evidence required before creating a demo release tag.
+Run it from a clean checkout of the candidate commit. Do not create or move the
+tag until every row passes and the public workflow reports a successful
+`quality-gate` for that exact commit.
 
 ## Compiler and runtime matrix
 
@@ -118,10 +119,11 @@ environment files, editor state, dependency directories, caches, credentials,
 and local-only material. Confirm that the candidate contains only intended
 public project files.
 
-After the branch is published, wait for the required `quality-gate` on the exact
-candidate commit. Create the annotated tag only from that verified commit. The
-tag message should identify the submitted demo state and record the native test
-count and compiler matrix.
+After the branch is published, wait for the required `quality-gate` on the
+exact candidate commit. Create the annotated tag only from that verified
+commit. The tag message should identify the demo state and record the native
+test count and compiler matrix. Never move an existing release tag to a newer
+commit.
 
 ## Post-release sanitizer verification
 
