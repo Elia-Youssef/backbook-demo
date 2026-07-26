@@ -16,6 +16,8 @@ enum class DateError : std::uint8_t {
     InvalidCalendarDate,
 };
 
+// IsoDate keeps calendar validation in one place while exposing epoch days for
+// stable journal encoding.
 class IsoDate final {
 public:
     [[nodiscard]] static Outcome<IsoDate, DateError> parse(std::string_view text);

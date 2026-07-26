@@ -114,6 +114,8 @@ CommandService::create(std::unique_ptr<storage::JournalStore> store,
 
 domain::Outcome<CommandReceipt, CommandServiceError>
 CommandService::execute(const CommandEnvelope& envelope) {
+    // One lock covers idempotency, headroom evaluation, durable append, and
+    // publication, giving accepted commands a single process order.
     const std::scoped_lock lock(command_mutex_);
 
     auto canonical = canonical_command_bytes(envelope);
@@ -182,6 +184,8 @@ CommandService::execute(const CommandEnvelope& envelope) {
         std::move(evaluation.prospective_state));
     CommandReceipt receipt{evaluation.result, false};
 
+    // Prepare all allocations before append so ordinary allocation failure
+    // cannot occur after the durable commit point.
     std::map<domain::CommandId, IdempotencyRecord> pending;
     pending.emplace(envelope.command_id,
                     IdempotencyRecord{canonical.value(), evaluation.result});
@@ -201,6 +205,8 @@ CommandService::execute(const CommandEnvelope& envelope) {
             std::move(failure));
     }
 
+    // Append-and-flush commits the command. Only then are the in-memory index
+    // and immutable reader snapshot published.
     idempotency_.insert(std::move(pending_record));
     next_sequence_ = following_sequence;
     snapshot_.store(std::move(published_snapshot), std::memory_order_release);

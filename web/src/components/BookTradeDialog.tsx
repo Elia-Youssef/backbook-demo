@@ -84,6 +84,8 @@ export function BookTradeDialog({
           receive,
         },
       };
+      // Editing the form creates a new logical request; submitting it unchanged
+      // reuses the pending envelope and command ID.
       const prepared = prepareCommandSubmission(
         pendingSubmission.current,
         JSON.stringify({ type: "BOOK_TRADE", payload }),

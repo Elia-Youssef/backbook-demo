@@ -74,6 +74,7 @@ adjust_modified_following(const IsoDate& unadjusted_date,
 
     const auto original_month = unadjusted_date.value().month();
     auto following = unadjusted_date;
+    // Modified following first searches forward, but never crosses the month.
     while (true) {
         auto next = offset_date(following, 1);
         if (!next || next.value().value().month() != original_month) {
@@ -85,6 +86,7 @@ adjust_modified_following(const IsoDate& unadjusted_date,
         }
     }
 
+    // Crossing the month boundary switches the search to preceding days.
     auto preceding = unadjusted_date;
     while (true) {
         auto previous = offset_date(preceding, -1);
@@ -107,6 +109,7 @@ calculate_t_plus_two(const IsoDate& trade_date,
 
     auto candidate = trade_date;
     std::uint8_t elapsed_business_days = 0U;
+    // The trade date is day zero; only later joint business days count.
     while (elapsed_business_days < settlement_lag) {
         auto next = offset_date(candidate, 1);
         if (!next) {

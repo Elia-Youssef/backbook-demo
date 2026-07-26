@@ -306,6 +306,7 @@ std::uint64_t fnv1a64(const std::span<const std::uint8_t> bytes) noexcept {
 
 domain::Outcome<std::uint64_t, FingerprintError>
 state_fingerprint(const domain::State& state) {
+    // Hash the canonical export, never the in-memory object representation.
     auto bytes = canonical_state_bytes(state);
     if (!bytes) {
         return domain::Outcome<std::uint64_t, FingerprintError>::failure(

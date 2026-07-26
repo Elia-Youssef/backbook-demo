@@ -54,6 +54,8 @@ struct CommandReceipt final {
                                          const CommandReceipt&) = default;
 };
 
+// Writers are serialized through one mutex. Readers atomically load immutable
+// snapshots and never wait for JSON serialization or filesystem work.
 class CommandService final {
 public:
     [[nodiscard]] static domain::Outcome<std::unique_ptr<CommandService>,

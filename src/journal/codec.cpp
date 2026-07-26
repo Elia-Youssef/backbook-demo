@@ -954,6 +954,8 @@ domain::Outcome<Bytes, CodecError> encode_frame(const CommandBatch& batch) {
     }
 
     Writer writer;
+    // The frame wrapper is deliberately small: magic, version, payload length,
+    // canonical payload, and a CRC over that payload.
     writer.write_string("BBK1");
     writer.write_u8(frame_format_version);
     writer.write_u32(static_cast<std::uint32_t>(payload.value().size()));
@@ -1026,6 +1028,8 @@ scan_journal(const std::span<const std::uint8_t> bytes) {
         const auto remaining = bytes.subspan(static_cast<std::size_t>(offset));
         auto decoded = decode_frame(remaining);
         if (!decoded) {
+            // Only a physically short final frame is a recoverable torn tail.
+            // CRC and format failures describe complete corrupt data.
             if (decoded.error().code == CodecErrorCode::UnexpectedEnd) {
                 return domain::Outcome<JournalScanResult, CodecError>::success(
                     JournalScanResult{std::move(batches), offset, true});

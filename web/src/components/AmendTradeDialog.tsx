@@ -87,6 +87,8 @@ export function AmendTradeDialog({
           replacementTerms,
         },
       });
+      // Posting IDs belong to the command identity and must survive an
+      // unchanged retry together with the command ID.
       const prepared = prepareCommandSubmission(
         pendingSubmission.current,
         signature,

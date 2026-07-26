@@ -351,6 +351,8 @@ validate_canonical_command_request(
         return domain::Outcome<std::uint8_t, CanonicalCommandRequestError>::
             failure(CanonicalCommandRequestError::Malformed);
     }
+    // The frame-level command ID and the ID inside the canonical request must
+    // agree before the request is admitted to the replay index.
     const auto expected = expected_command_id.value();
     if (encoded_command_id.size() != expected.size()) {
         return domain::Outcome<std::uint8_t, CanonicalCommandRequestError>::

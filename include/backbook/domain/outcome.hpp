@@ -6,6 +6,7 @@
 
 namespace backbook::domain {
 
+// Expected business failures travel as values rather than exceptions.
 template <typename T, typename E>
 class [[nodiscard]] Outcome final {
     static_assert(!std::is_void_v<T>);

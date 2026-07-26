@@ -36,6 +36,8 @@ export function snapshotAfterLoad(
 }
 
 async function loadSnapshot(): Promise<SnapshotLoadResult> {
+  // All three reads must describe the same immutable service snapshot before
+  // the dashboard replaces its visible state.
   const [state, ledger, settlements] = await Promise.all([
     readState(),
     readLedger(),
@@ -100,6 +102,7 @@ export function useBackbook(): BackbookModel {
     setConnection(snapshotRef.current === null ? "CONNECTING" : "REFRESHING");
     let loaded = await loadSnapshot();
     if (!loaded.ok && loaded.mismatch) {
+      // A writer may commit between reads, so one immediate retry is expected.
       loaded = await loadSnapshot();
     }
     if (sequence !== requestSequence.current) {
@@ -113,6 +116,7 @@ export function useBackbook(): BackbookModel {
       setError(null);
       return true;
     }
+    // Failed refreshes retain the last coherent data and only change status.
     setError(loaded.error);
     setConnection(
       loaded.error.kind === "transport" ? "OFFLINE" : "STALE",

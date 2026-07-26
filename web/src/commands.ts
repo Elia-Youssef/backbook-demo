@@ -17,6 +17,7 @@ export function prepareCommandSubmission(
   signature: string,
   create: () => CommandEnvelope,
 ): PreparedCommandSubmission {
+  // An unchanged retry must reuse every identifier in the original envelope.
   if (previous?.signature === signature) {
     return previous;
   }

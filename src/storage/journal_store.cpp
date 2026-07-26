@@ -103,6 +103,8 @@ FileJournalStore::append_and_flush(const std::span<const std::uint8_t> frame) {
     if (!stream) {
         return write_failure(JournalStoreErrorCode::AppendFailed);
     }
+    // Flush is the commit guarantee for this process model; this is not a
+    // portable power-loss durability claim.
     stream.flush();
     if (!stream) {
         return write_failure(JournalStoreErrorCode::FlushFailed);
@@ -187,6 +189,7 @@ recover_journal(JournalStore& store) {
                 recovery_codec_error(scan.error()));
     }
     if (scan.value().truncated_tail) {
+        // Recovery removes only bytes after the last fully validated frame.
         auto truncated = store.truncate(scan.value().last_valid_offset);
         if (!truncated) {
             return domain::Outcome<journal::JournalScanResult,

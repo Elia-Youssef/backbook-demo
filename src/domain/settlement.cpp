@@ -27,6 +27,8 @@ struct NetAccumulator final {
     std::vector<Money::MinorUnits> unmatched_amounts;
 };
 
+// Opposite cashflows cancel as they arrive. This avoids a temporary signed
+// overflow when the final bilateral net is still representable.
 void add_cashflow(NetAccumulator& accumulator,
                   const SettlementDirection direction,
                   Money::MinorUnits amount) {
@@ -186,6 +188,8 @@ derive_bilateral_settlements(const std::vector<Trade>& trades) {
     }
 
     std::sort(obligations.begin(), obligations.end(), settlement_less);
+    // Sorting makes API output and state fingerprints independent of input
+    // trade order.
     return Outcome<
         std::vector<SettlementObligation>,
         SettlementError>::success(std::move(obligations));

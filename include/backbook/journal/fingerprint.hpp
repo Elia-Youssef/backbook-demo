@@ -15,6 +15,8 @@ enum class FingerprintError : std::uint8_t {
     SizeOverflow,
 };
 
+// Canonical state bytes are sorted and versioned so equal logical states have
+// the same fingerprint on every supported compiler.
 [[nodiscard]] domain::Outcome<Bytes, FingerprintError>
 canonical_state_bytes(const domain::State& state);
 

@@ -125,6 +125,8 @@ enum class CommandBatchError : std::uint8_t {
     ResultStateVersionExceedsSequence,
 };
 
+// One accepted command becomes one batch, which keeps its request, event, and
+// logical response together for replay and idempotency.
 class CommandBatch final {
 public:
     [[nodiscard]] static domain::Outcome<CommandBatch, CommandBatchError>

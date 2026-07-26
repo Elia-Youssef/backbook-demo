@@ -24,6 +24,8 @@ class TradeOperations;
 
 }  // namespace detail
 
+// Trade versions are immutable records. Amendment creates a linked replacement
+// rather than rewriting the confirmed contract in place.
 class Trade final {
 public:
     [[nodiscard]] static Trade capture(

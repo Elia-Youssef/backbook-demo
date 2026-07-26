@@ -26,6 +26,8 @@ struct CommandEvaluation final {
     journal::CommandResult result;
 };
 
+// Evaluation is pure: it computes the next state and durable record without
+// touching storage or publishing a snapshot.
 [[nodiscard]] domain::Outcome<CommandEvaluation, CommandEvaluationError>
 evaluate_command(const domain::State& current, const Command& command);
 

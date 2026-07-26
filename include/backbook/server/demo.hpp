@@ -16,6 +16,8 @@ namespace backbook::server {
 inline constexpr std::uint64_t canonical_demo_state_fingerprint =
     0x21bd5cac4ef6e98dULL;
 
+// Demo input uses the same command boundary as HTTP; it never injects prepared
+// state behind the service.
 enum class DemoLimitError : std::uint8_t {
     DefinitionFailed,
 };

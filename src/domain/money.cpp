@@ -89,6 +89,8 @@ Outcome<Money, MoneyError> Money::parse(
     const std::uint64_t limit = negative ? negative_limit : positive_limit;
     std::uint64_t magnitude = 0;
 
+    // Checking before each decimal digit avoids ever overflowing the unsigned
+    // accumulator, including at the signed minimum boundary.
     const auto append_digit = [&magnitude, limit](const char digit) -> bool {
         const auto numeric_digit = static_cast<std::uint64_t>(digit - '0');
         if (magnitude > (limit - numeric_digit) / 10U) {

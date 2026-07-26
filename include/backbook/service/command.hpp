@@ -69,6 +69,8 @@ using Command = std::variant<BookTradeCommand,
                              CancelTradeCommand,
                              RunEodCommand>;
 
+// The command ID covers the complete request. Reusing it with different bytes
+// is an idempotency conflict.
 struct CommandEnvelope final {
     domain::CommandId command_id;
     Command command;
@@ -92,6 +94,8 @@ enum class CanonicalCommandRequestError : std::uint8_t {
 [[nodiscard]] domain::Outcome<journal::Bytes, CommandEncodingError>
 canonical_command_bytes(const CommandEnvelope& envelope);
 
+// Recovery validates stored request bytes before rebuilding the idempotency
+// index, preventing unsupported or malformed requests from becoming trusted.
 [[nodiscard]] domain::Outcome<std::uint8_t, CanonicalCommandRequestError>
 validate_canonical_command_request(
     std::span<const std::uint8_t> bytes,

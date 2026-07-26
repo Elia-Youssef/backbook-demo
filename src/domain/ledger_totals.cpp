@@ -108,6 +108,8 @@ Outcome<LedgerTotals, LedgerTotalsError> LedgerTotals::with_entry(
 
 Outcome<LedgerTotals, LedgerTotalsError> recompute_ledger_totals(
     const std::span<const Posting> postings) {
+    // This independent fold is used to verify the incrementally maintained
+    // totals rather than trusting the same update path.
     std::array<Money::MinorUnits, 3U> totals{};
 
     for (const auto& posting : postings) {

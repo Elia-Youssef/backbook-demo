@@ -1,5 +1,6 @@
 declare const brand: unique symbol;
 
+// Brands keep wire-format strings distinct after runtime validation.
 export type BrandedString<Name extends string> = string & {
   readonly [brand]: Name;
 };

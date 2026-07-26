@@ -46,6 +46,8 @@ export function startVisibilityAwarePolling(
   }
 
   async function runRefresh() {
+    // Keep at most one read set in flight and do no background work while the
+    // page is hidden.
     if (stopped || refreshInFlight || !environment.isVisible()) {
       return;
     }

@@ -280,6 +280,8 @@ int main(const int argument_count, char* arguments[]) {
     try {
         return run(*options, std::filesystem::path(arguments[0]));
     } catch (...) {
+        // This is the last exception boundary; internal details are not
+        // printed.
         std::cerr
             << "Backbook stopped because of an unexpected boundary failure.\n";
         return 1;

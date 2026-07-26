@@ -29,6 +29,7 @@ struct ReplayError final {
     std::optional<domain::LedgerTotalsError> ledger_totals_error{};
 };
 
+// Replay starts from fresh limits and applies batches in exact sequence order.
 [[nodiscard]] domain::Outcome<domain::State, ReplayError>
 replay(domain::LimitHierarchy initial_limits,
        std::span<const CommandBatch> batches);

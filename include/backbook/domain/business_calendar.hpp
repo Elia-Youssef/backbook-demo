@@ -12,6 +12,7 @@ enum class HolidayCalendarError : std::uint8_t {
     DuplicateHoliday,
 };
 
+// Callers provide the holiday set explicitly; weekends are closed by default.
 class HolidayCalendar final {
 public:
     [[nodiscard]] static Outcome<HolidayCalendar, HolidayCalendarError>
@@ -33,6 +34,7 @@ enum class SettlementDateError : std::uint8_t {
     NoJointBusinessDayInMonth,
 };
 
+// A settlement day must be open in both currency calendars.
 [[nodiscard]] bool
 is_joint_business_day(const IsoDate& date,
                       const HolidayCalendar& first_calendar,

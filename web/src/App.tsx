@@ -69,6 +69,8 @@ export function App() {
       type: "RUN_EOD",
       payload: { asOfDate: eodDate },
     });
+    // Keep the exact EOD envelope until success so an ambiguous retry remains
+    // idempotent at the service.
     const prepared = prepareCommandSubmission(
       pendingEod.current,
       signature,
