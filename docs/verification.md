@@ -121,3 +121,20 @@ After the branch is published, wait for the required `quality-gate` on the exact
 candidate commit. Create the annotated tag only from that verified commit. The
 tag message should identify the submitted demo state and record the native test
 count and compiler matrix.
+
+## Post-release sanitizer verification
+
+Subsequent native changes also run the complete suite on Ubuntu 24.04 with
+Clang 18, AddressSanitizer, and UndefinedBehaviorSanitizer:
+
+```bash
+sudo apt-get install --no-install-recommends clang-18 libclang-rt-18-dev llvm-18
+export ASAN_SYMBOLIZER_PATH="$(command -v llvm-symbolizer-18)"
+cmake --preset clang-sanitizers
+cmake --build --preset clang-sanitizers --parallel
+ctest --preset clang-sanitizers --output-on-failure --timeout 30
+```
+
+The preset enables leak detection, fail-fast sanitizer behavior, stack traces,
+and frame pointers. The CI `quality-gate` requires this sanitizer job alongside
+the MSVC, GCC 13, and frontend jobs.

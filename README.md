@@ -158,9 +158,24 @@ npm run build
 git diff --exit-code -- dist
 ```
 
-The current verification baseline is 170 native tests on both MSVC 19.51
-(14.51 toolset) and GCC 13.3.0, plus 9 frontend tests on Node.js 24. See
-[Verification](docs/verification.md) for the release checklist.
+Run the post-release native sanitizer suite on Ubuntu 24.04 with Clang 18:
+
+```bash
+sudo apt-get install --no-install-recommends clang-18 libclang-rt-18-dev llvm-18
+export ASAN_SYMBOLIZER_PATH="$(command -v llvm-symbolizer-18)"
+cmake --preset clang-sanitizers
+cmake --build --preset clang-sanitizers --parallel
+ctest --preset clang-sanitizers --output-on-failure
+```
+
+This preset compiles and links the native suite with AddressSanitizer and
+UndefinedBehaviorSanitizer, enables leak detection, and stops on the first
+reported sanitizer failure.
+
+The current verification baseline is 170 native tests on MSVC 19.51
+(14.51 toolset), GCC 13.3.0, and Clang 18.1.3 with ASan and UBSan, plus 9
+frontend tests on Node.js 24. See [Verification](docs/verification.md) for the
+release checklist.
 
 ## Deliberate boundaries
 
