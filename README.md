@@ -128,8 +128,10 @@ transactional service then appends and flushes one command batch and only then
 publishes the immutable snapshot. Readers atomically load that snapshot without
 holding the command mutex.
 
-See [Architecture](docs/architecture.md) for the target boundaries, commit
-sequence, journal recovery rules, and HTTP snapshot contract.
+Start with the [Code Tour](docs/code-tour.md) for a guided path from HTTP input
+through command evaluation, domain transitions, durable replay, and browser
+state. See [Architecture](docs/architecture.md) for the target boundaries,
+commit sequence, journal recovery rules, and HTTP snapshot contract.
 
 ## HTTP surface
 
