@@ -16,10 +16,11 @@ against SHA-256 values recorded in `CMakeLists.txt`.
 
 ## Frontend runtime dependencies
 
-| Component | Pinned version | License |
-| --- | --- | --- |
-| [React](https://github.com/facebook/react) | 19.2.8 | MIT |
-| [React DOM](https://github.com/facebook/react) | 19.2.8 | MIT |
+| Component | Pinned version | Use | License |
+| --- | --- | --- | --- |
+| [React](https://github.com/facebook/react) | 19.2.8 | UI component runtime | MIT |
+| [React DOM](https://github.com/facebook/react) | 19.2.8 | Browser rendering | MIT |
+| [Scheduler](https://github.com/facebook/react) | 0.27.0 | React DOM scheduling runtime | MIT |
 
 ## Frontend development dependencies
 

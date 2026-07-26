@@ -146,6 +146,8 @@ struct LimitError final {
         const LimitError&) = default;
 };
 
+// Reserve and release return new hierarchies. Callers can discard a failed
+// prospective change without repairing partially updated headroom.
 class LimitHierarchy final {
 public:
     [[nodiscard]] static Outcome<LimitHierarchy, LimitError> create(

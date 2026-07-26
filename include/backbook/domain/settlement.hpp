@@ -70,6 +70,8 @@ enum class SettlementError : std::uint8_t {
     UnsupportedCurrency,
 };
 
+// Netting is bilateral and keeps value date, currency, counterparty, and
+// netting set as hard grouping boundaries.
 [[nodiscard]] Outcome<std::vector<SettlementObligation>, SettlementError>
 derive_bilateral_settlements(const std::vector<Trade>& trades);
 

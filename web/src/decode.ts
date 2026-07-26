@@ -44,6 +44,8 @@ export class SnapshotMismatchError extends Error {}
 
 type UnknownRecord = Record<string, unknown>;
 
+// Every network response starts as unknown and earns its application type only
+// after these decoders validate the complete shape.
 function record(value: unknown, path: string): UnknownRecord {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new ProtocolDecodeError(`${path} must be an object`);
@@ -182,6 +184,7 @@ export function decodeMoney(value: unknown, path = "$"): Money {
     member(source, "minorUnits", path),
     `${path}.minorUnits`,
   );
+  // BigInt preserves all signed 64-bit minor-unit values exactly.
   return { currency, minorUnits: BigInt(minorUnits) };
 }
 

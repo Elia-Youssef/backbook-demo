@@ -15,6 +15,8 @@ inline constexpr std::uint8_t event_format_version = 1U;
 inline constexpr std::uint8_t result_format_version = 1U;
 inline constexpr std::uint32_t maximum_payload_length = 64U * 1024U * 1024U;
 
+// The codec defines a portable byte format. It never writes native object
+// layouts, platform-sized integers, or unordered iteration order.
 enum class CodecErrorCode : std::uint8_t {
     SizeOverflow,
     UnexpectedEnd,
@@ -75,6 +77,8 @@ encode_frame(const CommandBatch& batch);
 [[nodiscard]] domain::Outcome<DecodedFrame, CodecError>
 decode_frame(std::span<const std::uint8_t> bytes);
 
+// A short final frame is recoverable as a torn tail; a complete bad frame is
+// reported as corruption.
 [[nodiscard]] domain::Outcome<JournalScanResult, CodecError>
 scan_journal(std::span<const std::uint8_t> bytes);
 

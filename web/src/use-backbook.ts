@@ -13,21 +13,31 @@ import type {
   DashboardSnapshot,
 } from "./contracts";
 import { combineSnapshots, SnapshotMismatchError } from "./decode";
+import { startVisibilityAwarePolling } from "./polling";
 
-interface SnapshotLoadSuccess {
+export interface SnapshotLoadSuccess {
   ok: true;
   value: DashboardSnapshot;
 }
 
-interface SnapshotLoadFailure {
+export interface SnapshotLoadFailure {
   ok: false;
   error: ClientError;
   mismatch: boolean;
 }
 
-type SnapshotLoadResult = SnapshotLoadSuccess | SnapshotLoadFailure;
+export type SnapshotLoadResult = SnapshotLoadSuccess | SnapshotLoadFailure;
+
+export function snapshotAfterLoad(
+  current: DashboardSnapshot | null,
+  loaded: SnapshotLoadResult,
+): DashboardSnapshot | null {
+  return loaded.ok ? loaded.value : current;
+}
 
 async function loadSnapshot(): Promise<SnapshotLoadResult> {
+  // All three reads must describe the same immutable service snapshot before
+  // the dashboard replaces its visible state.
   const [state, ledger, settlements] = await Promise.all([
     readState(),
     readLedger(),
@@ -87,32 +97,49 @@ export function useBackbook(): BackbookModel {
     snapshotRef.current = snapshot;
   }, [snapshot]);
 
-  const refresh = useCallback(async (): Promise<void> => {
+  const refreshOnce = useCallback(async (): Promise<boolean> => {
     const sequence = ++requestSequence.current;
     setConnection(snapshotRef.current === null ? "CONNECTING" : "REFRESHING");
     let loaded = await loadSnapshot();
     if (!loaded.ok && loaded.mismatch) {
+      // A writer may commit between reads, so one immediate retry is expected.
       loaded = await loadSnapshot();
     }
     if (sequence !== requestSequence.current) {
-      return;
+      return false;
     }
     if (loaded.ok) {
-      setSnapshot(loaded.value);
-      snapshotRef.current = loaded.value;
+      const nextSnapshot = snapshotAfterLoad(snapshotRef.current, loaded);
+      setSnapshot(nextSnapshot);
+      snapshotRef.current = nextSnapshot;
       setConnection("LIVE");
       setError(null);
-      return;
+      return true;
     }
+    // Failed refreshes retain the last coherent data and only change status.
     setError(loaded.error);
     setConnection(
       loaded.error.kind === "transport" ? "OFFLINE" : "STALE",
     );
+    return false;
   }, []);
 
+  const refresh = useCallback(async (): Promise<void> => {
+    await refreshOnce();
+  }, [refreshOnce]);
+
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    return startVisibilityAwarePolling(refreshOnce, {
+      isVisible: () => document.visibilityState !== "hidden",
+      setTimer: (callback, delayMilliseconds) =>
+        window.setTimeout(callback, delayMilliseconds),
+      clearTimer: (handle) => window.clearTimeout(handle),
+      subscribeToVisibility: (listener) => {
+        document.addEventListener("visibilitychange", listener);
+        return () => document.removeEventListener("visibilitychange", listener);
+      },
+    });
+  }, [refreshOnce]);
 
   const execute = useCallback(
     async (command: CommandEnvelope): Promise<boolean> => {

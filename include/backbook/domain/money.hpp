@@ -73,6 +73,8 @@ enum class MoneyError : std::uint8_t {
     return std::nullopt;
 }
 
+// Money is always stored as an integer number of minor units. Decimal parsing
+// happens only at the boundary, so calculations never depend on floating point.
 class Money final {
 public:
     using MinorUnits = std::int64_t;

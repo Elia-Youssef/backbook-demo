@@ -719,6 +719,8 @@ read_envelope(const domain::State& state, Json data) {
         return domain::Outcome<Json, ResponseEncodingError>::failure(
             ResponseEncodingError::FingerprintFailed);
     }
+    // Revisions and fingerprints are strings so browser code never rounds
+    // large integer values.
     return domain::Outcome<Json, ResponseEncodingError>::success(
         Json{{"stateVersion", std::to_string(state.version())},
              {"stateFingerprint", fingerprint_text(fingerprint.value())},
@@ -838,6 +840,8 @@ state_problem(const domain::StateError& state_error) {
 
 domain::Outcome<service::CommandEnvelope, CommandDecodeError>
 decode_command_request(const std::string_view body) {
+    // Parsing is non-throwing here; malformed JSON and valid-but-wrong fields
+    // produce different client errors.
     const auto document = Json::parse(body.begin(), body.end(), nullptr, false);
     if (document.is_discarded()) {
         return domain::Outcome<service::CommandEnvelope,
@@ -1069,6 +1073,7 @@ problem_from_service_error(const service::CommandServiceError& error) {
     case service::CommandServiceErrorCode::DuplicateJournalCommandId:
     case service::CommandServiceErrorCode::SequenceExhausted:
     case service::CommandServiceErrorCode::CommandEncodingFailure:
+    case service::CommandServiceErrorCode::InvalidCanonicalRequest:
     case service::CommandServiceErrorCode::JournalEncodingFailure:
     case service::CommandServiceErrorCode::InvariantViolation:
         return internal_problem();

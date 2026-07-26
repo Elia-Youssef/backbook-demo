@@ -140,6 +140,7 @@ public:
                 lifecycle_failure(confirmed.error()));
         }
 
+        // Limits and postings are prepared before the state copy is changed.
         const auto reserved = state.limits_.reserve(
             limit_path(*current.value()),
             current.value()->terms().pay());
@@ -203,6 +204,8 @@ public:
                 state_error(StateErrorCode::MissingConfirmationEntry));
         }
 
+        // Amendment tests replacement headroom after releasing the old
+        // reservation in a prospective hierarchy.
         const auto released = state.limits_.release(
             limit_path(*current.value()),
             current.value()->terms().pay());
@@ -242,6 +245,8 @@ public:
                 posting_policy_failure(replacement.error()));
         }
 
+        // Only after every check succeeds do reversal and rebook enter the
+        // returned state together.
         auto next = state;
         next.limits_ = std::move(reserved).value();
         next.trades_.at(current_key) = amendment.value().superseded();
@@ -301,6 +306,8 @@ public:
         auto next = state;
         const TradeVersionKey key{trade_id, expected_version};
         if (current.value()->state() == TradeState::Captured) {
+            // A captured trade has never posted, so cancellation needs no
+            // reversal or headroom release.
             if (reversal_ids.has_value()) {
                 return Outcome<State, StateError>::failure(
                     state_error(StateErrorCode::UnexpectedReversalIds));
@@ -384,6 +391,8 @@ public:
             next.trades_.at(key) = settled.value();
         }
 
+        // Settlement obligations are rebuilt from all settled versions so the
+        // result is deterministic after every EOD run.
         std::vector<Trade> settled_trades;
         settled_trades.reserve(next.trades_.size());
         for (const auto& [unused, trade] : next.trades_) {
@@ -428,6 +437,8 @@ private:
     [[nodiscard]] static Outcome<std::uint8_t, StateError> append_entry(
         State& state,
         const LedgerEntry& entry) {
+        // Check global posting-ID uniqueness and totals before mutating either
+        // index.
         for (const Posting& posting : entry.postings()) {
             if (state.posting_ids_.contains(posting.id())) {
                 return Outcome<std::uint8_t, StateError>::failure(

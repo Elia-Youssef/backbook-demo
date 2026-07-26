@@ -172,6 +172,8 @@ replay(domain::LimitHierarchy initial_limits,
         }
         state = std::move(applied).value();
 
+        // The stored response is part of the durable contract, so replay also
+        // proves that it describes the event that was just applied.
         if (!result_matches(
                 batch.result(), batch.events().front(), before, state)) {
             return domain::Outcome<domain::State, ReplayError>::failure(
@@ -183,6 +185,7 @@ replay(domain::LimitHierarchy initial_limits,
         ++expected_sequence;
     }
 
+    // Recompute independently before serving recovered state.
     const auto recomputed =
         domain::recompute_ledger_totals(state.ledger_entries());
     if (!recomputed) {

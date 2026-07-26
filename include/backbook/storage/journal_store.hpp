@@ -32,6 +32,8 @@ struct JournalStoreSuccess final {
                                          const JournalStoreSuccess&) = default;
 };
 
+// This is the single runtime-polymorphic boundary in the application. Tests and
+// production code share the same append-and-flush contract.
 class JournalStore {
 public:
     virtual ~JournalStore() = default;
@@ -68,6 +70,7 @@ public:
     }
 
 private:
+    // Once a write fails, further writes are refused until restart and replay.
     [[nodiscard]] domain::Outcome<JournalStoreSuccess, JournalStoreError>
     write_failure(JournalStoreErrorCode code);
 

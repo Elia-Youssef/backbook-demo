@@ -56,17 +56,17 @@ to build or run the C++ demo.
 Run from Visual Studio Developer PowerShell:
 
 ```powershell
-cmake --preset msvc-debug
-cmake --build --preset msvc-debug --parallel
-.\build\msvc-debug\backbook-server.exe --demo
+cmake --preset msvc-release
+cmake --build --preset msvc-release --parallel
+.\build\msvc-release\backbook-server.exe --demo
 ```
 
 ### Linux
 
 ```bash
-cmake --preset gcc-debug
-cmake --build --preset gcc-debug --parallel
-./build/gcc-debug/backbook-server --demo
+cmake --preset gcc-release
+cmake --build --preset gcc-release --parallel
+./build/gcc-release/backbook-server --demo
 ```
 
 Open `http://127.0.0.1:8080`. Demo mode creates an isolated journal in the
@@ -87,11 +87,26 @@ to loopback by default. A non-loopback bind requires both `--bind <address>` and
 | Rejected limits have no side effects | Journal append and snapshot publication occur only after prospective validation |
 | Recovery is deterministic | Canonical framed encoding, CRC32 validation, ordered replay, and canonical state export |
 | Competing confirmations cannot over-reserve headroom | Command execution is serialized; a concurrency test proves exactly one winner |
+| T+2 respects both settlement calendars | Joint-business-day advancement across two explicit holiday sets with modified-following adjustment |
 
 Money uses signed 64-bit minor units. USD, JPY, and KWD retain their different
 currency exponents throughout the C++ domain, JSON contract, and browser
 display. JSON carries monetary amounts, state versions, and fingerprints as
 strings so JavaScript never routes them through an imprecise number.
+
+## Business-date calculation
+
+The pure domain library accepts two explicit holiday calendars and treats
+Saturday, Sunday, or a holiday in either calendar as closed. T+2 starts on the
+day after the trade date and advances only on days when both calendars are
+open. Modified-following adjustment moves a closed date forward within its
+month; if following would cross a month boundary, it rolls backward to the
+first joint business day in the original month.
+
+The application continues to store and journal the resulting explicit value
+date. It does not infer jurisdictions, download calendar data, or invent
+observance rules; callers remain responsible for supplying the two reviewed
+holiday sets used for a calculation.
 
 ## Architecture
 
@@ -107,8 +122,9 @@ flowchart LR
 ```
 
 The domain library has no file, socket, HTTP, environment, clock, or logging
-dependency. The service evaluates a complete prospective state, verifies ledger
-and limit invariants, appends and flushes one command batch, and only then
+dependency. A pure service evaluator maps each command to its complete
+prospective state, journal event, and result without accessing storage. The
+transactional service then appends and flushes one command batch and only then
 publishes the immutable snapshot. Readers atomically load that snapshot without
 holding the command mutex.
 
@@ -131,20 +147,22 @@ GET  /healthz
 Success responses use `application/json`. Errors use
 `application/problem+json`. Command bodies are limited to 64 KiB. The frontend
 loads state, ledger, and settlement responses together and displays a new
-snapshot only when their state versions and fingerprints agree.
+snapshot only when their state versions and fingerprints agree. It polls every
+five seconds while visible, pauses when hidden, and backs off after failed
+reads. Retrying an unchanged write reuses its exact command request.
 
 ## Test and rebuild
 
 Run the native suite:
 
 ```powershell
-ctest --preset msvc-debug --output-on-failure
+ctest --preset msvc-release --output-on-failure
 ```
 
 or:
 
 ```bash
-ctest --preset gcc-debug --output-on-failure
+ctest --preset gcc-release --output-on-failure
 ```
 
 Rebuild the frontend with Node.js 24 and the committed lockfile:
@@ -172,16 +190,17 @@ This preset compiles and links the native suite with AddressSanitizer and
 UndefinedBehaviorSanitizer, enables leak detection, and stops on the first
 reported sanitizer failure.
 
-The current verification baseline is 170 native tests on MSVC 19.51
-(14.51 toolset), GCC 13.3.0, and Clang 18.1.3 with ASan and UBSan, plus 9
+The current verification baseline is 191 native tests on MSVC 19.51
+(14.51 toolset), GCC 13.3.0, and Clang 18.1.3 with ASan and UBSan, plus 16
 frontend tests on Node.js 24. See [Verification](docs/verification.md) for the
 release checklist.
 
 ## Deliberate boundaries
 
 Backbook has no authentication and is not designed for internet-facing use. It
-does not calculate prices, rates, P&L, holiday-adjusted dates, multilateral
-netting, nostro funding, or payment schedules. CRC32 detects accidental journal
+does not calculate prices, rates, P&L, multilateral netting, nostro funding, or
+payment schedules. Its holiday calendars are explicit caller-supplied data, not
+a maintained market-calendar service. CRC32 detects accidental journal
 corruption; it is not an authenticity mechanism. The FNV-1a state fingerprint
 is a deterministic comparison value, not a cryptographic hash.
 

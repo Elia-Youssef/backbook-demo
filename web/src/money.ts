@@ -15,6 +15,8 @@ export interface MoneyParts {
 }
 
 export function moneyParts(money: Money): MoneyParts {
+  // Splitting display parts lets tables align decimals without inventing
+  // fractional digits for zero-exponent currencies such as JPY.
   const exponent = exponents[money.currency];
   const negative = money.minorUnits < 0n;
   const absolute = negative ? -money.minorUnits : money.minorUnits;

@@ -37,6 +37,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(cpp_httplib nlohmann_json)
 
 add_library(backbook-domain STATIC
+    src/domain/business_calendar.cpp
     src/domain/date.cpp
     src/domain/domain.cpp
     src/domain/fx_terms.cpp
@@ -94,6 +95,7 @@ backbook_enable_warnings(backbook-storage)
 
 add_library(backbook-service STATIC
     src/service/command.cpp
+    src/service/command_evaluator.cpp
     src/service/command_service.cpp
 )
 add_library(backbook::service ALIAS backbook-service)
@@ -156,6 +158,7 @@ if(BUILD_TESTING)
     FetchContent_MakeAvailable(googletest)
 
     add_executable(backbook-domain-tests
+        tests/unit/business_calendar_tests.cpp
         tests/unit/date_tests.cpp
         tests/unit/domain_scenario_tests.cpp
         tests/unit/domain_smoke_tests.cpp

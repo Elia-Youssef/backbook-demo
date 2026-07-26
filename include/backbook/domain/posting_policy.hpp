@@ -48,6 +48,8 @@ enum class PostingPolicyError : std::uint8_t {
     LedgerUnbalanced,
 };
 
+// Posting construction is centralized here so confirmation and reversal use
+// one reviewed account and debit/credit policy.
 [[nodiscard]] Outcome<LedgerEntry, PostingPolicyError>
 build_confirmation_entry(
     const Trade& confirmed,

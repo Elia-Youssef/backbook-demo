@@ -158,6 +158,7 @@ Outcome<LedgerEntry, PostingPolicyError> build_confirmation_entry(
     const std::string receivable_account =
         account(settlement_receivable_prefix, confirmed.book_id().value());
 
+    // Each cashflow creates an equal debit and credit in its own currency.
     std::array<Outcome<Posting, PostingError>, 4U> posting_results{
         Posting::create(
             posting_ids.pay_control_debit,
@@ -218,6 +219,8 @@ Outcome<LedgerEntry, PostingPolicyError> build_reversal_entry(
 
     std::vector<Posting> reversals;
     reversals.reserve(ids.size());
+    // Position is significant: each new posting links to and reverses the
+    // corresponding original posting exactly.
     for (std::size_t index = 0U; index < ids.size(); ++index) {
         auto result = Posting::reverse(ids[index], original_postings[index]);
         if (result.has_error()) {

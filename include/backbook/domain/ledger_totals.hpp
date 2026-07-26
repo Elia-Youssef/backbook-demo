@@ -16,6 +16,8 @@ enum class LedgerTotalsError : std::uint8_t {
     InvalidPostingSide,
 };
 
+// Totals use debit minus credit for each supported currency. A balanced ledger
+// therefore reports zero without converting between currencies.
 class LedgerTotals final {
 public:
     [[nodiscard]] static constexpr LedgerTotals zero() noexcept {

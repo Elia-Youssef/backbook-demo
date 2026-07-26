@@ -149,6 +149,7 @@ private:
 
         server_.Get("/api/v1/state", [this](const httplib::Request&,
                                             httplib::Response& response) {
+            // Hold one immutable snapshot for the whole response.
             const auto snapshot = command_service_.snapshot();
             set_read_response(response, encode_state_response(*snapshot));
         });
@@ -196,6 +197,8 @@ private:
         server_.set_exception_handler([](const httplib::Request&,
                                          httplib::Response& response,
                                          std::exception_ptr exception) {
+            // Boundary failures stay generic so implementation details never
+            // enter an HTTP response.
             static_cast<void>(exception);
             set_problem_response(response, internal_problem());
         });

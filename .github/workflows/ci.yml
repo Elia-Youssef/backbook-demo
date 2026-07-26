@@ -50,9 +50,9 @@ jobs:
           Set-Location $env:GITHUB_WORKSPACE
 
           where.exe cl.exe
-          cmake --preset msvc-debug
-          cmake --build --preset msvc-debug --parallel
-          ctest --preset msvc-debug --output-on-failure --timeout 30
+          cmake --preset msvc-release
+          cmake --build --preset msvc-release --parallel
+          ctest --preset msvc-release --output-on-failure --timeout 30
 
   linux-gcc:
     name: Linux / GCC 13
@@ -74,9 +74,9 @@ jobs:
           export PATH="$tool_bin:$PATH"
 
           test "$(g++ -dumpfullversion -dumpversion | cut -d. -f1)" = "13"
-          cmake --preset gcc-debug
-          cmake --build --preset gcc-debug --parallel
-          ctest --preset gcc-debug --output-on-failure --timeout 30
+          cmake --preset gcc-release
+          cmake --build --preset gcc-release --parallel
+          ctest --preset gcc-release --output-on-failure --timeout 30
 
   linux-clang-sanitizers:
     name: Ubuntu / Clang 18 / ASan + UBSan
@@ -142,6 +142,120 @@ jobs:
           npm run build
           git diff --exit-code -- dist
 
+  repository-checks:
+    name: Repository checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install pinned formatter
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends clang-format-18
+          test "$(clang-format-18 --version | grep -oE '[0-9]+' | head -n 1)" = "18"
+
+      - name: Check changed C++ formatting
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PULL_REQUEST_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BASE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            base="$PULL_REQUEST_BASE"
+          elif [[ -n "$PUSH_BASE" ]] &&
+               [[ "$PUSH_BASE" != "0000000000000000000000000000000000000000" ]]; then
+            base="$PUSH_BASE"
+          else
+            base="$(git rev-parse HEAD^)"
+          fi
+          format_diff="$(
+            git clang-format-18 \
+              --binary clang-format-18 \
+              --diff \
+              --quiet \
+              "$base" \
+              HEAD \
+              -- \
+              '*.cpp' \
+              '*.hpp'
+          )"
+          if [[ -n "$format_diff" ]]; then
+            printf '%s\n' "$format_diff"
+            exit 1
+          fi
+
+      - name: Check repository hygiene
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PULL_REQUEST_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BASE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            base="$PULL_REQUEST_BASE"
+          elif [[ -n "$PUSH_BASE" ]] &&
+               [[ "$PUSH_BASE" != "0000000000000000000000000000000000000000" ]]; then
+            base="$PUSH_BASE"
+          else
+            base="$(git rev-parse HEAD^)"
+          fi
+          git diff --check "$base" HEAD
+
+          forbidden_paths='(^|/)(build|node_modules|coverage|logs?|cache|\.idea|\.vscode)(/|$)|(^|/)\.env($|\.)|\.(log|pem|key|pfx|p12)$'
+          if git ls-files | grep -E "$forbidden_paths"; then
+            exit 1
+          fi
+
+          placeholder_pattern='TO''DO|FIX''ME|coming soon|<Name>|<repo URL>|<full name>'
+          if git grep -n -I -E "$placeholder_pattern" -- \
+            README.md docs include src tests web/src; then
+            exit 1
+          fi
+
+          if git grep -n -I -E '(^|[^[:alnum:]_])any([^[:alnum:]_]|$)' -- \
+            web/src; then
+            exit 1
+          fi
+
+      - name: Audit public content
+        shell: bash
+        run: |
+          set -euo pipefail
+          blocked_pattern='(^|[^[:alnum:]_])(A''I|Co''dex|Clau''de|Chat''GPT|Open''A''I|Anth''ropic|ag''ent|assis''tant|b''ot|pro''mpt)([^[:alnum:]_]|$)|coding-assis''tant pro''venance'
+          if git grep -n -I -i -E "$blocked_pattern" -- \
+            README.md docs .github include src tests web/src; then
+            exit 1
+          fi
+          if git log --format='%s%n%b' | grep -i -E "$blocked_pattern"; then
+            exit 1
+          fi
+
+          local_path_pattern='[A-Za-z]:\\|/ho''me/|/ro''ot/|/m''nt/[a-z]/'
+          if git grep -n -I -E "$local_path_pattern" -- \
+            README.md \
+            THIRD_PARTY_NOTICES.md \
+            docs \
+            .github \
+            CMakeLists.txt \
+            CMakePresets.json \
+            demo \
+            include \
+            src \
+            tests \
+            web/src; then
+            exit 1
+          fi
+
   quality-gate:
     name: quality-gate
     if: ${{ always() }}
@@ -150,6 +264,7 @@ jobs:
       - linux-gcc
       - linux-clang-sanitizers
       - frontend
+      - repository-checks
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
@@ -160,9 +275,11 @@ jobs:
           LINUX_RESULT: ${{ needs.linux-gcc.result }}
           CLANG_SANITIZERS_RESULT: ${{ needs.linux-clang-sanitizers.result }}
           FRONTEND_RESULT: ${{ needs.frontend.result }}
+          REPOSITORY_CHECKS_RESULT: ${{ needs.repository-checks.result }}
         run: |
           set -euo pipefail
           test "$WINDOWS_RESULT" = "success"
           test "$LINUX_RESULT" = "success"
           test "$CLANG_SANITIZERS_RESULT" = "success"
           test "$FRONTEND_RESULT" = "success"
+          test "$REPOSITORY_CHECKS_RESULT" = "success"

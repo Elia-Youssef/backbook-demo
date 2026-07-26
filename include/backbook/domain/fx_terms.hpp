@@ -20,6 +20,8 @@ enum class FxTermsError : std::uint8_t {
     SameCurrency,
 };
 
+// These are agreed pay and receive cashflows, not values derived from a price
+// or exchange-rate calculation.
 class FxTerms final {
 public:
     [[nodiscard]] static Outcome<FxTerms, FxTermsError> create(

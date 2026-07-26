@@ -244,6 +244,7 @@ Outcome<LimitHierarchy, LimitError> LimitHierarchy::reserve(
         }
     }
 
+    // Validate the complete root-to-leaf path before changing any balance.
     auto next = *this;
     for (const LimitNode& node : nodes) {
         auto& balance =
@@ -284,6 +285,7 @@ Outcome<LimitHierarchy, LimitError> LimitHierarchy::release(
         }
     }
 
+    // As with reserve, mutation happens only after every node has passed.
     auto next = *this;
     for (const LimitNode& node : nodes) {
         auto& balance =

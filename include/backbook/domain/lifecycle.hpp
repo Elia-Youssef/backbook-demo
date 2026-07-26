@@ -28,6 +28,8 @@ enum class LifecycleError : std::uint8_t {
     InvalidAction,
 };
 
+// Lifecycle changes go through one closed transition table so illegal state
+// changes cannot be introduced by individual callers.
 [[nodiscard]] Outcome<TradeState, LifecycleError> transition(
     TradeState state,
     TradeAction action);

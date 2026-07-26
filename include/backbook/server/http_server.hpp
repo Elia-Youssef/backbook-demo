@@ -12,6 +12,8 @@ namespace backbook::server {
 
 inline constexpr std::size_t maximum_request_body_bytes = 64U * 1024U;
 
+// The HTTP layer owns transport concerns only. Business decisions remain in
+// the command service and domain.
 class HttpServer final {
 public:
     explicit HttpServer(

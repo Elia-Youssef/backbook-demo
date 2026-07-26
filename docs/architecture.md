@@ -19,21 +19,39 @@ reason to change.
 one store through `std::unique_ptr<JournalStore>` and publishes readers a
 `std::shared_ptr<const State>` through the C++20 atomic shared-pointer facility.
 
+## Command evaluation seam
+
+`evaluate_command` is a pure, storage-free boundary inside `backbook-service`.
+One exhaustive visit over the closed command variant performs the domain
+transition and returns the prospective state, journal event, and command result
+as one value. It also verifies ledger and limit invariants before the result can
+reach the durability boundary.
+
+This keeps command semantics in one mapping point while `CommandService`
+retains responsibility for command-ID idempotency, serialisation, journal
+commit, failure quarantine, and immutable snapshot publication. A
+characterization test pins the existing event tags, result tags, canonical
+request bytes, state versions, and final canonical fingerprint across every
+command variant. Direct evaluator tests exercise successful evaluation and
+typed domain rejection without constructing a journal store.
+
 ## Command commit sequence
 
 ```mermaid
 sequenceDiagram
     participant Client
     participant Service
+    participant Evaluator
     participant Snapshot
     participant Store
 
     Client->>Service: Command envelope
     Service->>Service: Lock and check command ID
     Service->>Snapshot: Load current immutable state
-    Service->>Service: Validate and build complete batch
-    Service->>Service: Fold prospective state
-    Service->>Service: Verify ledger and limits
+    Service->>Evaluator: Evaluate command
+    Evaluator->>Evaluator: Transition and verify invariants
+    Evaluator-->>Service: Prospective state, event, result
+    Service->>Service: Build complete batch
     Service->>Store: Append and flush one frame
     alt append succeeds
         Service->>Snapshot: Atomically publish prospective state
@@ -74,8 +92,10 @@ strings, ordered collections, epoch-day dates, and currency plus signed
 Recovery scans frames from the beginning and folds valid batches into fresh
 state. An incomplete final frame is a torn tail and is truncated to the last
 valid boundary. A complete frame with a bad CRC, an unsupported version, or a
-duplicate command ID is fatal corruption. Valid replay rebuilds idempotency,
-verifies ledger totals, and publishes the recovered snapshot.
+duplicate command ID is fatal corruption. Before replay, the service validates
+the canonical command-request version, complete request shape, embedded command
+ID, and command-to-event tag. Valid replay rebuilds idempotency, verifies ledger
+totals, and publishes the recovered snapshot.
 
 The canonical fingerprint is computed from an ordered state export. FNV-1a is
 used only to compare deterministic state; it is not a security primitive.
@@ -107,6 +127,23 @@ replacement links back and remains confirmed.
 End-of-day processing settles eligible confirmed versions and derives bilateral
 obligations grouped by counterparty, netting set, value date, and currency. Zero
 nets are omitted, and output is stable-sorted.
+
+## Business-date convention
+
+`HolidayCalendar` owns a sorted, duplicate-free set of explicit closed dates.
+Weekends are closed independently of that set. A joint business day must be
+open in both calendars supplied to the calculation.
+
+T+2 counts two joint business days beginning after the trade date. The result is
+passed through modified-following adjustment: move forward while the adjusted
+date remains in the original month, otherwise roll backward to the first joint
+business day in that month. Supported-date exhaustion and a month with no joint
+business day are typed failures.
+
+This calculation remains in `backbook-domain`. It has no clock, environment,
+filesystem, or external calendar dependency. Commands and journal events retain
+the calculated explicit value date, so the existing wire format and
+deterministic replay contract do not change.
 
 ## HTTP snapshot contract
 

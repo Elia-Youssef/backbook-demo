@@ -1,6 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import { newCommandId } from "./commands";
+import {
+  newCommandId,
+  prepareCommandSubmission,
+} from "./commands";
+import type { PreparedCommandSubmission } from "./commands";
 import { AmendTradeDialog } from "./components/AmendTradeDialog";
 import { BlotterTable, tradeKey } from "./components/BlotterTable";
 import { BookTradeDialog } from "./components/BookTradeDialog";
@@ -32,6 +36,7 @@ export function App() {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [bookOpen, setBookOpen] = useState(false);
   const [amendOpen, setAmendOpen] = useState(false);
+  const pendingEod = useRef<PreparedCommandSubmission | null>(null);
 
   const selectedTrade = useMemo(
     () => trades.find((trade) => tradeKey(trade) === selectedKey) ?? null,
@@ -56,16 +61,32 @@ export function App() {
 
   const eodDate = latestConfirmedDate(trades);
 
-  function runEod() {
+  async function runEod() {
     if (eodDate === null) {
       return;
     }
-    const command: CommandEnvelope = {
-      commandId: newCommandId(),
+    const signature = JSON.stringify({
       type: "RUN_EOD",
       payload: { asOfDate: eodDate },
-    };
-    void model.execute(command);
+    });
+    // Keep the exact EOD envelope until success so an ambiguous retry remains
+    // idempotent at the service.
+    const prepared = prepareCommandSubmission(
+      pendingEod.current,
+      signature,
+      (): CommandEnvelope => ({
+        commandId: newCommandId(),
+        type: "RUN_EOD",
+        payload: { asOfDate: eodDate },
+      }),
+    );
+    pendingEod.current = prepared;
+    if (
+      (await model.execute(prepared.command)) &&
+      pendingEod.current === prepared
+    ) {
+      pendingEod.current = null;
+    }
   }
 
   const loading = model.snapshot === null;
@@ -110,7 +131,7 @@ export function App() {
         onRefresh={() => void model.refresh()}
         onBook={() => setBookOpen(true)}
         onAmend={() => setAmendOpen(true)}
-        onEod={runEod}
+        onEod={() => void runEod()}
       />
 
       {model.error === null ? null : (

@@ -1,7 +1,11 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { FormEvent } from "react";
 
-import { newCommandId } from "../commands";
+import {
+  newCommandId,
+  prepareCommandSubmission,
+} from "../commands";
+import type { PreparedCommandSubmission } from "../commands";
 import type {
   CommandEnvelope,
   Currency,
@@ -52,6 +56,7 @@ export function BookTradeDialog({
   const [receiveCurrency, setReceiveCurrency] = useState<Currency>("JPY");
   const [receiveAmount, setReceiveAmount] = useState("3750000");
   const [validation, setValidation] = useState<string | null>(null);
+  const pendingSubmission = useRef<PreparedCommandSubmission | null>(null);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -66,25 +71,33 @@ export function BookTradeDialog({
       return;
     }
     try {
-      const command: CommandEnvelope = {
-        commandId: newCommandId(),
-        type: "BOOK_TRADE",
-        payload: {
-          tradeId: decodeTradeId(tradeId),
-          bookId: decodeBookId(bookId),
-          counterpartyId: decodeCounterpartyId(counterpartyId),
-          nettingSetId: decodeNettingSetId(nettingSetId),
-          terms: {
-            kind,
-            tradeDate: decodeIsoDate(tradeDate),
-            valueDate: decodeIsoDate(valueDate),
-            pay,
-            receive,
-          },
+      const payload = {
+        tradeId: decodeTradeId(tradeId),
+        bookId: decodeBookId(bookId),
+        counterpartyId: decodeCounterpartyId(counterpartyId),
+        nettingSetId: decodeNettingSetId(nettingSetId),
+        terms: {
+          kind,
+          tradeDate: decodeIsoDate(tradeDate),
+          valueDate: decodeIsoDate(valueDate),
+          pay,
+          receive,
         },
       };
+      // Editing the form creates a new logical request; submitting it unchanged
+      // reuses the pending envelope and command ID.
+      const prepared = prepareCommandSubmission(
+        pendingSubmission.current,
+        JSON.stringify({ type: "BOOK_TRADE", payload }),
+        (): CommandEnvelope => ({
+          commandId: newCommandId(),
+          type: "BOOK_TRADE",
+          payload,
+        }),
+      );
+      pendingSubmission.current = prepared;
       setValidation(null);
-      if (await onSubmit(command)) {
+      if (await onSubmit(prepared.command)) {
         onClose();
       }
     } catch {

@@ -29,8 +29,10 @@ async function request<Value>(
   decoder: Decoder<Value>,
   init?: RequestInit,
 ): Promise<ClientResult<Value>> {
+  // The transport boundary converts timeouts, network failures, bad problems,
+  // and bad success bodies into explicit results; callers do not catch here.
   const controller = new AbortController();
-  const timeout = window.setTimeout(
+  const timeout = globalThis.setTimeout(
     () => controller.abort(),
     requestTimeoutMilliseconds,
   );
@@ -88,7 +90,7 @@ async function request<Value>(
       },
     };
   } finally {
-    window.clearTimeout(timeout);
+    globalThis.clearTimeout(timeout);
   }
 }
 

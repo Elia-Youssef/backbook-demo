@@ -18,6 +18,8 @@ enum class IdError : std::uint8_t {
     InvalidCharacter,
 };
 
+// Each identifier owns its validated text. The tag prevents accidentally
+// passing, for example, a book ID where a trade ID is required.
 template <typename Tag>
 class Id final {
 public:

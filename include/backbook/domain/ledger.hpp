@@ -95,6 +95,8 @@ enum class LedgerError : std::uint8_t {
     Unbalanced,
 };
 
+// The factory is the accounting boundary: no LedgerEntry exists unless every
+// currency balances independently.
 class LedgerEntry final {
 public:
     [[nodiscard]] static Outcome<LedgerEntry, LedgerError> create(

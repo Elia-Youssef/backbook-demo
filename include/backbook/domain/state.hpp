@@ -67,6 +67,8 @@ struct StateError final {
         const StateError&) = default;
 };
 
+// State-changing functions copy this value and return a complete prospective
+// state. The service publishes that copy only after durable append succeeds.
 class State final {
 public:
     explicit State(LimitHierarchy limits);

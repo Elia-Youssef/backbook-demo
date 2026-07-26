@@ -126,6 +126,8 @@ public:
             current.version_,
             std::nullopt);
 
+        // The replacement remains confirmed because it replaces an already
+        // confirmed contractual version.
         return Outcome<TradeAmendment, TradeError>::success(TradeAmendment(
             std::move(superseded),
             std::move(replacement)));

@@ -63,6 +63,8 @@ enum class ResponseEncodingError : std::uint8_t {
     InvalidState,
 };
 
+// Network data starts as untrusted JSON and is validated before domain values
+// are constructed.
 [[nodiscard]] domain::Outcome<service::CommandEnvelope, CommandDecodeError>
 decode_command_request(std::string_view body);
 

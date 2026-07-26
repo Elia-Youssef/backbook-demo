@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   combineSnapshots,
+  decodeCommandResponse,
   decodeLedgerResponse,
   decodeMoney,
   decodeProblem,
@@ -9,6 +10,8 @@ import {
   decodeStateResponse,
   SnapshotMismatchError,
 } from "./decode";
+import { snapshotAfterLoad } from "./use-backbook";
+import type { SnapshotLoadResult } from "./use-backbook";
 
 function stateEnvelope(version = "7", fingerprint = "0x21bd5cac4ef6e98d") {
   return {
@@ -137,6 +140,21 @@ describe("read envelope decoding", () => {
       ),
     ).toThrow(SnapshotMismatchError);
   });
+
+  it("retains the last coherent snapshot after a mismatch", () => {
+    const current = combineSnapshots(
+      decodeStateResponse(stateEnvelope()),
+      decodeLedgerResponse(ledgerEnvelope()),
+      decodeSettlementsResponse(settlementEnvelope()),
+    );
+    const mismatch: SnapshotLoadResult = {
+      ok: false,
+      mismatch: true,
+      error: { kind: "protocol", message: "Snapshot mismatch." },
+    };
+
+    expect(snapshotAfterLoad(current, mismatch)).toBe(current);
+  });
 });
 
 describe("problem decoding", () => {
@@ -157,5 +175,101 @@ describe("problem decoding", () => {
     expect(problem.nodePath?.at(-1)).toBe("BOOK-FX-1");
     expect(problem.required?.minorUnits).toBe(6_000_000n);
     expect(problem.remaining?.minorUnits).toBe(4_875_000n);
+  });
+
+  it("accepts every documented problem code and rejects unknown codes", () => {
+    const codes = [
+      "VALIDATION_FAILED",
+      "NOT_FOUND",
+      "ILLEGAL_TRANSITION",
+      "VERSION_CONFLICT",
+      "LIMIT_BREACH",
+      "IDEMPOTENCY_CONFLICT",
+      "JOURNAL_UNAVAILABLE",
+      "INTERNAL_ERROR",
+    ];
+    for (const code of codes) {
+      expect(
+        decodeProblem({
+          type: `urn:backbook:problem:${code}`,
+          title: "Problem",
+          status: 409,
+          detail: "Request rejected.",
+          code,
+        }).code,
+      ).toBe(code);
+    }
+
+    expect(() =>
+      decodeProblem({
+        type: "urn:backbook:problem:UNKNOWN",
+        title: "Unknown",
+        status: 500,
+        detail: "Unknown problem.",
+        code: "UNKNOWN",
+      }),
+    ).toThrow(/unsupported problem code/);
+  });
+});
+
+describe("command response decoding", () => {
+  it("decodes every result variant from unknown input", () => {
+    const responses = [
+      {
+        idempotentReplay: false,
+        result: {
+          type: "TRADE_BOOKED",
+          tradeId: "TRD-1001",
+          version: "1",
+          stateVersion: "1",
+        },
+      },
+      {
+        idempotentReplay: false,
+        result: {
+          type: "TRADE_CONFIRMED",
+          tradeId: "TRD-1001",
+          version: "1",
+          stateVersion: "2",
+        },
+      },
+      {
+        idempotentReplay: false,
+        result: {
+          type: "TRADE_AMENDED",
+          tradeId: "TRD-1001",
+          supersededVersion: "1",
+          replacementVersion: "2",
+          stateVersion: "3",
+        },
+      },
+      {
+        idempotentReplay: false,
+        result: {
+          type: "TRADE_CANCELLED",
+          tradeId: "TRD-1002",
+          version: "1",
+          stateVersion: "4",
+        },
+      },
+      {
+        idempotentReplay: true,
+        result: {
+          type: "EOD_RUN",
+          asOfDate: "2026-07-27",
+          settledTradeCount: "2",
+          stateVersion: "5",
+        },
+      },
+    ];
+
+    expect(responses.map((response) => decodeCommandResponse(response).result.type))
+      .toEqual([
+        "TRADE_BOOKED",
+        "TRADE_CONFIRMED",
+        "TRADE_AMENDED",
+        "TRADE_CANCELLED",
+        "EOD_RUN",
+      ]);
   });
 });

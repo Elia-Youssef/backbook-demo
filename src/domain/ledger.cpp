@@ -148,6 +148,7 @@ Outcome<LedgerEntry, LedgerError> LedgerEntry::create(
     std::set<PostingId> posting_ids;
     std::array<std::int64_t, 3U> balances{};
 
+    // Debit adds and credit subtracts from the bucket for that currency.
     for (const auto& posting : postings) {
         if (!posting_ids.insert(posting.id()).second) {
             return Outcome<LedgerEntry, LedgerError>::failure(
@@ -175,6 +176,8 @@ Outcome<LedgerEntry, LedgerError> LedgerEntry::create(
         }
     }
 
+    // Cross-currency offsets are deliberately impossible: every bucket must be
+    // zero on its own.
     for (const auto balance : balances) {
         if (balance != 0) {
             return Outcome<LedgerEntry, LedgerError>::failure(

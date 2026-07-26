@@ -24,6 +24,7 @@ enum class CommandServiceErrorCode : std::uint8_t {
     DuplicateJournalCommandId,
     SequenceExhausted,
     CommandEncodingFailure,
+    InvalidCanonicalRequest,
     IdempotencyConflict,
     DomainRejected,
     JournalEncodingFailure,
@@ -39,6 +40,7 @@ struct CommandServiceError final {
     std::optional<storage::JournalRecoveryError> recovery_error{};
     std::optional<journal::ReplayError> replay_error{};
     std::optional<CommandEncodingError> command_encoding_error{};
+    std::optional<CanonicalCommandRequestError> canonical_request_error{};
     std::optional<domain::StateError> state_error{};
     std::optional<journal::CodecError> codec_error{};
     std::optional<storage::JournalStoreError> store_error{};
@@ -52,6 +54,8 @@ struct CommandReceipt final {
                                          const CommandReceipt&) = default;
 };
 
+// Writers are serialized through one mutex. Readers atomically load immutable
+// snapshots and never wait for JSON serialization or filesystem work.
 class CommandService final {
 public:
     [[nodiscard]] static domain::Outcome<std::unique_ptr<CommandService>,
