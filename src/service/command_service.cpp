@@ -1,181 +1,17 @@
 #include "backbook/service/command_service.hpp"
 
-#include "backbook/domain/ledger_totals.hpp"
+#include "backbook/service/command_evaluator.hpp"
 
 #include <limits>
-#include <type_traits>
 #include <utility>
-#include <variant>
 #include <vector>
 
 namespace backbook::service {
 namespace {
 
-template <typename> inline constexpr bool always_false = false;
-
 [[nodiscard]] CommandServiceError
 service_error(const CommandServiceErrorCode code) {
     return CommandServiceError(code);
-}
-
-[[nodiscard]] journal::Event make_event(const Command& command) {
-    return std::visit(
-        [](const auto& value) -> journal::Event {
-            using Value = std::remove_cvref_t<decltype(value)>;
-            if constexpr (std::is_same_v<Value, BookTradeCommand>) {
-                return journal::TradeBookedEvent{value.trade_id,
-                                                 value.book_id,
-                                                 value.counterparty_id,
-                                                 value.netting_set_id,
-                                                 value.terms};
-            } else if constexpr (std::is_same_v<Value, ConfirmTradeCommand>) {
-                return journal::TradeConfirmedEvent{
-                    value.trade_id, value.expected_version, value.posting_ids};
-            } else if constexpr (std::is_same_v<Value, AmendTradeCommand>) {
-                return journal::TradeAmendedEvent{
-                    value.trade_id,
-                    value.expected_version,
-                    value.replacement_terms,
-                    value.reversal_ids,
-                    value.replacement_posting_ids};
-            } else if constexpr (std::is_same_v<Value, CancelTradeCommand>) {
-                return journal::TradeCancelledEvent{
-                    value.trade_id, value.expected_version, value.reversal_ids};
-            } else if constexpr (std::is_same_v<Value, RunEodCommand>) {
-                return journal::EodRunEvent{value.as_of_date};
-            } else {
-                static_assert(always_false<Value>);
-            }
-        },
-        command);
-}
-
-[[nodiscard]] domain::Outcome<domain::State, domain::StateError>
-apply_command(const domain::State& state, const Command& command) {
-    return std::visit(
-        [&state](const auto& value)
-            -> domain::Outcome<domain::State, domain::StateError> {
-            using Value = std::remove_cvref_t<decltype(value)>;
-            if constexpr (std::is_same_v<Value, BookTradeCommand>) {
-                return domain::book_trade(state,
-                                          value.trade_id,
-                                          value.book_id,
-                                          value.counterparty_id,
-                                          value.netting_set_id,
-                                          value.terms);
-            } else if constexpr (std::is_same_v<Value, ConfirmTradeCommand>) {
-                return domain::confirm_trade(state,
-                                             value.trade_id,
-                                             value.expected_version,
-                                             value.posting_ids);
-            } else if constexpr (std::is_same_v<Value, AmendTradeCommand>) {
-                return domain::amend_trade(state,
-                                           value.trade_id,
-                                           value.expected_version,
-                                           value.replacement_terms,
-                                           value.reversal_ids,
-                                           value.replacement_posting_ids);
-            } else if constexpr (std::is_same_v<Value, CancelTradeCommand>) {
-                return domain::cancel_trade(state,
-                                            value.trade_id,
-                                            value.expected_version,
-                                            value.reversal_ids);
-            } else if constexpr (std::is_same_v<Value, RunEodCommand>) {
-                return domain::run_eod(state, value.as_of_date);
-            } else {
-                static_assert(always_false<Value>);
-            }
-        },
-        command);
-}
-
-[[nodiscard]] std::uint64_t settled_trade_count(const domain::State& state) {
-    std::uint64_t count = 0U;
-    for (const auto& [unused, trade] : state.trade_versions()) {
-        static_cast<void>(unused);
-        if (trade.state() == domain::TradeState::Settled) {
-            ++count;
-        }
-    }
-    return count;
-}
-
-[[nodiscard]] domain::Outcome<journal::CommandResult, CommandServiceError>
-make_result(const Command& command,
-            const domain::State& before,
-            const domain::State& after) {
-    return std::visit(
-        [&before, &after](const auto& value)
-            -> domain::Outcome<journal::CommandResult, CommandServiceError> {
-            using Value = std::remove_cvref_t<decltype(value)>;
-            if constexpr (std::is_same_v<Value, BookTradeCommand>) {
-                return domain::Outcome<
-                    journal::CommandResult,
-                    CommandServiceError>::success(journal::TradeBookedResult{
-                    value.trade_id, 1U, after.version()});
-            } else if constexpr (std::is_same_v<Value, ConfirmTradeCommand>) {
-                return domain::Outcome<
-                    journal::CommandResult,
-                    CommandServiceError>::success(journal::TradeConfirmedResult{
-                    value.trade_id, value.expected_version, after.version()});
-            } else if constexpr (std::is_same_v<Value, AmendTradeCommand>) {
-                if (value.expected_version ==
-                    std::numeric_limits<std::uint32_t>::max()) {
-                    return domain::Outcome<journal::CommandResult,
-                                           CommandServiceError>::
-                        failure(service_error(
-                            CommandServiceErrorCode::InvariantViolation));
-                }
-                return domain::Outcome<
-                    journal::CommandResult,
-                    CommandServiceError>::success(journal::TradeAmendedResult{
-                    value.trade_id,
-                    value.expected_version,
-                    value.expected_version + 1U,
-                    after.version()});
-            } else if constexpr (std::is_same_v<Value, CancelTradeCommand>) {
-                return domain::Outcome<
-                    journal::CommandResult,
-                    CommandServiceError>::success(journal::TradeCancelledResult{
-                    value.trade_id, value.expected_version, after.version()});
-            } else if constexpr (std::is_same_v<Value, RunEodCommand>) {
-                const auto before_count = settled_trade_count(before);
-                const auto after_count = settled_trade_count(after);
-                if (after_count < before_count ||
-                    after_count - before_count >
-                        std::numeric_limits<std::uint32_t>::max()) {
-                    return domain::Outcome<journal::CommandResult,
-                                           CommandServiceError>::
-                        failure(service_error(
-                            CommandServiceErrorCode::InvariantViolation));
-                }
-                return domain::Outcome<
-                    journal::CommandResult,
-                    CommandServiceError>::success(journal::EodRunResult{
-                    value.as_of_date,
-                    static_cast<std::uint32_t>(after_count - before_count),
-                    after.version()});
-            } else {
-                static_assert(always_false<Value>);
-            }
-        },
-        command);
-}
-
-[[nodiscard]] bool invariants_hold(const domain::State& state) {
-    const auto recomputed =
-        domain::recompute_ledger_totals(state.ledger_entries());
-    if (!recomputed || recomputed.value() != state.ledger_totals()) {
-        return false;
-    }
-    for (const auto& balance : state.limits().snapshots()) {
-        if (balance.capacity_minor_units < 0 ||
-            balance.reserved_minor_units < 0 ||
-            balance.reserved_minor_units > balance.capacity_minor_units) {
-            return false;
-        }
-    }
-    return true;
 }
 
 }  // namespace
@@ -287,30 +123,28 @@ CommandService::execute(const CommandEnvelope& envelope) {
     }
 
     const auto current = snapshot_.load(std::memory_order_acquire);
-    auto prospective = apply_command(*current, envelope.command);
-    if (!prospective) {
-        auto failure = service_error(CommandServiceErrorCode::DomainRejected);
-        failure.state_error = prospective.error();
-        return domain::Outcome<CommandReceipt, CommandServiceError>::failure(
-            std::move(failure));
-    }
-    if (!invariants_hold(prospective.value())) {
+    auto evaluated = evaluate_command(*current, envelope.command);
+    if (!evaluated) {
+        if (evaluated.error().code ==
+            CommandEvaluationErrorCode::DomainRejected) {
+            auto failure =
+                service_error(CommandServiceErrorCode::DomainRejected);
+            failure.state_error = evaluated.error().state_error;
+            return domain::Outcome<
+                CommandReceipt,
+                CommandServiceError>::failure(std::move(failure));
+        }
         return domain::Outcome<CommandReceipt, CommandServiceError>::failure(
             service_error(CommandServiceErrorCode::InvariantViolation));
     }
-
-    auto result = make_result(envelope.command, *current, prospective.value());
-    if (!result) {
-        return domain::Outcome<CommandReceipt, CommandServiceError>::failure(
-            result.error());
-    }
+    auto evaluation = std::move(evaluated).value();
 
     auto batch = journal::CommandBatch::create(
         next_sequence_,
         envelope.command_id,
         canonical.value(),
-        std::vector<journal::Event>{make_event(envelope.command)},
-        result.value());
+        std::vector<journal::Event>{evaluation.event},
+        evaluation.result);
     if (!batch) {
         return domain::Outcome<CommandReceipt, CommandServiceError>::failure(
             service_error(CommandServiceErrorCode::InvariantViolation));
@@ -326,12 +160,13 @@ CommandService::execute(const CommandEnvelope& envelope) {
     }
 
     auto published_snapshot =
-        std::make_shared<const domain::State>(std::move(prospective).value());
-    CommandReceipt receipt{result.value(), false};
+        std::make_shared<const domain::State>(
+            std::move(evaluation.prospective_state));
+    CommandReceipt receipt{evaluation.result, false};
 
     std::map<domain::CommandId, IdempotencyRecord> pending;
     pending.emplace(envelope.command_id,
-                    IdempotencyRecord{canonical.value(), result.value()});
+                    IdempotencyRecord{canonical.value(), evaluation.result});
     auto pending_record = pending.extract(pending.begin());
 
     const auto following_sequence =

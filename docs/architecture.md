@@ -19,21 +19,39 @@ reason to change.
 one store through `std::unique_ptr<JournalStore>` and publishes readers a
 `std::shared_ptr<const State>` through the C++20 atomic shared-pointer facility.
 
+## Command evaluation seam
+
+`evaluate_command` is a pure, storage-free boundary inside `backbook-service`.
+One exhaustive visit over the closed command variant performs the domain
+transition and returns the prospective state, journal event, and command result
+as one value. It also verifies ledger and limit invariants before the result can
+reach the durability boundary.
+
+This keeps command semantics in one mapping point while `CommandService`
+retains responsibility for command-ID idempotency, serialisation, journal
+commit, failure quarantine, and immutable snapshot publication. A
+characterization test pins the existing event tags, result tags, canonical
+request bytes, state versions, and final canonical fingerprint across every
+command variant. Direct evaluator tests exercise successful evaluation and
+typed domain rejection without constructing a journal store.
+
 ## Command commit sequence
 
 ```mermaid
 sequenceDiagram
     participant Client
     participant Service
+    participant Evaluator
     participant Snapshot
     participant Store
 
     Client->>Service: Command envelope
     Service->>Service: Lock and check command ID
     Service->>Snapshot: Load current immutable state
-    Service->>Service: Validate and build complete batch
-    Service->>Service: Fold prospective state
-    Service->>Service: Verify ledger and limits
+    Service->>Evaluator: Evaluate command
+    Evaluator->>Evaluator: Transition and verify invariants
+    Evaluator-->>Service: Prospective state, event, result
+    Service->>Service: Build complete batch
     Service->>Store: Append and flush one frame
     alt append succeeds
         Service->>Snapshot: Atomically publish prospective state

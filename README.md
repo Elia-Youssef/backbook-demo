@@ -122,8 +122,9 @@ flowchart LR
 ```
 
 The domain library has no file, socket, HTTP, environment, clock, or logging
-dependency. The service evaluates a complete prospective state, verifies ledger
-and limit invariants, appends and flushes one command batch, and only then
+dependency. A pure service evaluator maps each command to its complete
+prospective state, journal event, and result without accessing storage. The
+transactional service then appends and flushes one command batch and only then
 publishes the immutable snapshot. Readers atomically load that snapshot without
 holding the command mutex.
 
@@ -187,7 +188,7 @@ This preset compiles and links the native suite with AddressSanitizer and
 UndefinedBehaviorSanitizer, enables leak detection, and stops on the first
 reported sanitizer failure.
 
-The current verification baseline is 184 native tests on MSVC 19.51
+The current verification baseline is 187 native tests on MSVC 19.51
 (14.51 toolset), GCC 13.3.0, and Clang 18.1.3 with ASan and UBSan, plus 9
 frontend tests on Node.js 24. See [Verification](docs/verification.md) for the
 release checklist.

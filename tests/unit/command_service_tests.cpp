@@ -2,10 +2,12 @@
 
 #include "backbook/journal/codec.hpp"
 #include "backbook/journal/fingerprint.hpp"
+#include "backbook/service/command_evaluator.hpp"
 #include "journal_test_support.hpp"
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <barrier>
 #include <cstddef>
 #include <cstdint>
@@ -282,6 +284,132 @@ TEST(CommandServiceTest, FullLifecycleReplaysToIdenticalCanonicalState) {
     EXPECT_EQ(repeated_result->state_version, 3U);
     EXPECT_EQ(recovered_service->snapshot().get(), after.get());
     EXPECT_EQ(recovered_store->bytes(), persisted);
+}
+
+TEST(CommandServiceCharacterizationTest,
+     EveryCommandVariantProducesTheStableJournalAndStateContract) {
+    storage::MemoryJournalStore* store = nullptr;
+    auto service = make_service(store);
+    const auto trade_one = test_support::id<domain::TradeId>("TRD-1001");
+    const auto trade_two = test_support::id<domain::TradeId>("TRD-1002");
+    const auto path = test_support::limit_path();
+
+    const std::array commands{
+        book_command("CMD-1", "TRD-1001"),
+        confirm_command("CMD-2", "TRD-1001", "PST-V1"),
+        CommandEnvelope{
+            test_support::id<domain::CommandId>("CMD-3"),
+            AmendTradeCommand{trade_one,
+                              1U,
+                              test_support::terms(
+                                  10'125'000, 1'518'750'000),
+                              test_support::reversal_ids("PST-V1-REV"),
+                              test_support::confirmation_ids("PST-V2")}},
+        CommandEnvelope{
+            test_support::id<domain::CommandId>("CMD-4"),
+            RunEodCommand{test_support::date("2026-07-27")}},
+        CommandEnvelope{
+            test_support::id<domain::CommandId>("CMD-5"),
+            BookTradeCommand{trade_two,
+                             path.book_id(),
+                             path.counterparty_id(),
+                             path.netting_set_id(),
+                             test_support::terms(1'000'000, 150'000'000)}},
+        CommandEnvelope{
+            test_support::id<domain::CommandId>("CMD-6"),
+            CancelTradeCommand{trade_two, 1U, std::nullopt}},
+    };
+
+    for (const auto& command : commands) {
+        const auto executed = service->execute(command);
+        ASSERT_TRUE(executed);
+        EXPECT_FALSE(executed.value().idempotent_replay);
+    }
+
+    const auto scanned = journal::scan_journal(store->bytes());
+    ASSERT_TRUE(scanned);
+    ASSERT_EQ(scanned.value().batches.size(), commands.size());
+    constexpr std::array<std::size_t, 6U> expected_variant_indexes{
+        0U, 1U, 2U, 4U, 0U, 3U};
+    for (std::size_t index = 0U; index < commands.size(); ++index) {
+        const auto& batch = scanned.value().batches[index];
+        EXPECT_EQ(batch.sequence(), index + 1U);
+        ASSERT_EQ(batch.events().size(), 1U);
+        EXPECT_EQ(batch.events().front().index(),
+                  expected_variant_indexes[index]);
+        EXPECT_EQ(batch.result().index(), expected_variant_indexes[index]);
+        const auto canonical = canonical_command_bytes(commands[index]);
+        ASSERT_TRUE(canonical);
+        EXPECT_EQ(batch.canonical_request(), canonical.value());
+        EXPECT_EQ(journal::result_state_version(batch.result()), index + 1U);
+    }
+
+    const auto snapshot = service->snapshot();
+    EXPECT_EQ(snapshot->version(), 6U);
+    EXPECT_EQ(snapshot->trade_versions().size(), 3U);
+    EXPECT_EQ(snapshot->ledger_entries().size(), 3U);
+    EXPECT_EQ(snapshot->posting_count(), 12U);
+    EXPECT_EQ(snapshot->settlements().size(), 2U);
+    ASSERT_NE(snapshot->current_trade(trade_one), nullptr);
+    ASSERT_NE(snapshot->current_trade(trade_two), nullptr);
+    EXPECT_EQ(
+        snapshot->current_trade(trade_one)->state(),
+        domain::TradeState::Settled);
+    EXPECT_EQ(
+        snapshot->current_trade(trade_two)->state(),
+        domain::TradeState::Cancelled);
+
+    const auto fingerprint = journal::state_fingerprint(*snapshot);
+    ASSERT_TRUE(fingerprint);
+    EXPECT_EQ(fingerprint.value(), 0x41a9a83742d77c33ULL);
+}
+
+TEST(CommandEvaluationTest,
+     ProducesProspectiveStateEventAndResultWithoutStorage) {
+    const domain::State current(test_support::limits());
+    const auto envelope = book_command("CMD-BOOK-1", "TRD-1001");
+
+    const auto evaluated = evaluate_command(current, envelope.command);
+
+    ASSERT_TRUE(evaluated);
+    EXPECT_EQ(current.version(), 0U);
+    EXPECT_TRUE(current.trade_versions().empty());
+    EXPECT_EQ(evaluated.value().prospective_state.version(), 1U);
+    ASSERT_NE(
+        evaluated.value().prospective_state.current_trade(
+            test_support::id<domain::TradeId>("TRD-1001")),
+        nullptr);
+
+    const auto* event =
+        std::get_if<journal::TradeBookedEvent>(&evaluated.value().event);
+    ASSERT_NE(event, nullptr);
+    EXPECT_EQ(event->trade_id,
+              test_support::id<domain::TradeId>("TRD-1001"));
+
+    const auto* result =
+        std::get_if<journal::TradeBookedResult>(&evaluated.value().result);
+    ASSERT_NE(result, nullptr);
+    EXPECT_EQ(result->trade_id,
+              test_support::id<domain::TradeId>("TRD-1001"));
+    EXPECT_EQ(result->version, 1U);
+    EXPECT_EQ(result->state_version, 1U);
+}
+
+TEST(CommandEvaluationTest, PreservesTypedDomainRejection) {
+    const domain::State current(test_support::limits());
+    const auto envelope =
+        confirm_command("CMD-CONFIRM-1", "TRD-MISSING", "PST-V1");
+
+    const auto evaluated = evaluate_command(current, envelope.command);
+
+    ASSERT_TRUE(evaluated.has_error());
+    EXPECT_EQ(evaluated.error().code,
+              CommandEvaluationErrorCode::DomainRejected);
+    ASSERT_TRUE(evaluated.error().state_error.has_value());
+    EXPECT_EQ(evaluated.error().state_error->code,
+              domain::StateErrorCode::TradeNotFound);
+    EXPECT_EQ(current.version(), 0U);
+    EXPECT_TRUE(current.trade_versions().empty());
 }
 
 TEST(CommandServiceTest, AppendFailurePublishesNothingAndDisablesWrites) {

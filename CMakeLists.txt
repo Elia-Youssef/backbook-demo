@@ -95,6 +95,7 @@ backbook_enable_warnings(backbook-storage)
 
 add_library(backbook-service STATIC
     src/service/command.cpp
+    src/service/command_evaluator.cpp
     src/service/command_service.cpp
 )
 add_library(backbook::service ALIAS backbook-service)
