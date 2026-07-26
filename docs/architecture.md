@@ -108,6 +108,23 @@ End-of-day processing settles eligible confirmed versions and derives bilateral
 obligations grouped by counterparty, netting set, value date, and currency. Zero
 nets are omitted, and output is stable-sorted.
 
+## Business-date convention
+
+`HolidayCalendar` owns a sorted, duplicate-free set of explicit closed dates.
+Weekends are closed independently of that set. A joint business day must be
+open in both calendars supplied to the calculation.
+
+T+2 counts two joint business days beginning after the trade date. The result is
+passed through modified-following adjustment: move forward while the adjusted
+date remains in the original month, otherwise roll backward to the first joint
+business day in that month. Supported-date exhaustion and a month with no joint
+business day are typed failures.
+
+This calculation remains in `backbook-domain`. It has no clock, environment,
+filesystem, or external calendar dependency. Commands and journal events retain
+the calculated explicit value date, so the existing wire format and
+deterministic replay contract do not change.
+
 ## HTTP snapshot contract
 
 Every business read carries:
